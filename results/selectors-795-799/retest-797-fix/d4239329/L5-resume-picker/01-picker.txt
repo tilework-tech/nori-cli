@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+                                                                                  Details
+     Conversation                             Updated           Branch
+  ▏› 761bf2cf-e9eb-46e7-be12-6551712140f2     0 seconds ago     Not reported▕     Session         761bf2cf-e9eb-46…
+     29f3bb63-dde7-4394-ac94-900581a014fe     0 seconds ago     Not reported      Project         f05440287d1870d1
+     dac45d4f-fdc1-49fd-902b-388c0a9e78cf     0 seconds ago     Not reported      Agent           mock-model
+     11d8fa58-a189-45b3-9388-36b6d88b1c44     0 seconds ago     Not reported      Working direc…  /tmp/vsel/runs/d…
+     a1d37f2e-9175-4f26-94d6-cc711cce8220     0 seconds ago     Not reported      Branch          Not reported
+     4bfb9f47-86ab-4c50-ba2e-5198ffe6f160     0 seconds ago     Not reported
+     ae7d1ec1-de37-4c63-b615-9854523f3a59     0 seconds ago     Not reported
+     beca0764-72bb-4f0e-861f-95545add3025     0 seconds ago     Not reported
+     5d5057e8-249e-405c-bc47-b0ef0fabb0e9     0 seconds ago     Not reported
+     93cd3aa4-acab-4080-a5e0-5fb6ce41b9c4     0 seconds ago     Not reported
+     6620fcb5-e4c4-4756-b7fa-d9c8b1e3dc56     0 seconds ago     Not reported
+     9f3a3e9c-eb6f-408a-93fc-88785b38db36     0 seconds ago     Not reported
+     08e56299-b898-4dc6-bad6-063bbe590d62     0 seconds ago     Not reported
+     7b18cbbf-bb99-44e2-aff9-8182bef47e54     0 seconds ago     Not reported
+     95386097-0e37-43d1-b369-9bb71db62e74     0 seconds ago     Not reported
+     53452fab-5d3e-4d2d-b69d-9949c72c7ce0     0 seconds ago     Not reported
+     4649a7c9-0b3f-49dc-b64c-5f7234d41009     0 seconds ago     Not reported
+     73c312ca-f8ca-4367-92f9-2cbde791fe68     0 seconds ago     Not reported
+
+
+
+
+
+  ↑↓/j/k browse  / search  enter resume  esc start new  ctrl+c quit
+

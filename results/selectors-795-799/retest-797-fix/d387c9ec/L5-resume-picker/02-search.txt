@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+  ⌕  fe8eb1                                                                       Details
+
+     Conversation                             Updated           Branch            Session         fe8eb1c5-75b4-47…
+  ▏› fe8eb1c5-75b4-4770-afce-605173d89dbe     3 seconds ago     Not reported▕     Project         30b819bc110ee3ae
+                                                                                  Agent           mock-model
+                                                                                  Working direc…  /tmp/vsel/runs/d…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ browse  type filter  enter resume  esc stop search  ctrl+c quit
+

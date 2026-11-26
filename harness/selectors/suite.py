@@ -10,7 +10,8 @@ from drv import *
 
 # Stack order: main..#794 (66a76859) -> #795 -> #791 -> #797 -> #798 -> #799
 LEVEL = {"66a76859": 794, "c6cef012": 795, "27ccdfda": 796, "d4239329": 797,
-         "575e4af0": 798, "7a797061": 799}
+         "575e4af0": 798, "7a797061": 799,
+         "0f47a50b": 797, "f2630c0e": 798, "d387c9ec": 799}
 
 bins = Path(sys.argv[1]).resolve()
 label = sys.argv[2]
@@ -79,6 +80,27 @@ GREEN = {"green", "00cd00", "008000"}
 
 def is_green(fg):
     return fg in GREEN or fg == "2"
+
+
+def full_row(t):
+    """Background of every cell between the rails of each focused line, and the
+    background of the prompt panel just outside them (the cell before the left rail)."""
+    grid = cells(t)
+    out = []
+    for r in grid:
+        text = row_text(r)
+        if "▏" not in text or "▕" not in text:
+            continue
+        x = text.index("▏"); xr = text.rindex("▕")
+        out.append({"inside": sorted({c[2] for c in r[x + 1:xr]}), "outside": r[x - 1][2] if x else None})
+    return out
+
+
+def full_row_ok(sid, tag, t, pr):
+    rows = full_row(t)
+    ok = bool(rows) and all(len(r["inside"]) == 1 and r["inside"][0] not in ("default", r["outside"])
+                            for r in rows)
+    check(sid, f"{tag}.full_row_contrast_against_panel", ok, rows, pr)
 
 
 def marks_ok(sid, tag, rep, shaded, pr):
@@ -239,10 +261,16 @@ def s_permission(shaded):
     check(sid, "header.command_shown", "Command: rm -rf ./synthetic-build" in scr, "")
     rep = focus_report(t)
     marks_ok(sid, "prompt", rep, shaded, 797)
+    if shaded:
+        full_row_ok(sid, "prompt", t, 797)
     check(sid, "label_not_green_or_bold", rep and not any(is_green(f) for f in rep["label_fg"])
           and not rep["label_bold"], rep, 797)
     t.keys("j"); time.sleep(0.3)
     check(sid, "j_moves", "Reject" in focused_label(t), focused_label(t), 797)
+    t.capture("01b-prompt-after-j")
+    marks_ok(sid, "prompt_after_j", focus_report(t), shaded, 797)
+    if shaded:
+        full_row_ok(sid, "prompt_after_j", t, 797)
     t.keys("k"); time.sleep(0.3)
     check(sid, "k_moves", "Allow" in focused_label(t), focused_label(t), 797)
     t.keys("f"); time.sleep(0.3)
@@ -268,6 +296,15 @@ def s_approve_all(shaded):
     check(sid, "red_warning_kept", any("harmful" in r for r in red), red)
     rep = focus_report(t)
     marks_ok(sid, "confirm", rep, shaded, 797)
+    if shaded:
+        full_row_ok(sid, "confirm", t, 797)
+    t.keys("j"); time.sleep(0.3)
+    t.capture("02b-confirm-after-j")
+    check(sid, "confirm.j_moves", "Approve all, and stop" in focused_label(t), focused_label(t), 797)
+    marks_ok(sid, "confirm_after_j", focus_report(t), shaded, 797)
+    if shaded:
+        full_row_ok(sid, "confirm_after_j", t, 797)
+    t.keys("k"); time.sleep(0.3)
     check(sid, "label_not_green_or_bold", rep and not any(is_green(f) for f in rep["label_fg"])
           and not rep["label_bold"], rep, 797)
     footer = [l for l in t.screen().splitlines() if "enter confirm" in l]

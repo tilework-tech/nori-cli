@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+  ⌕  dae1a5                                                                       Details
+
+     Conversation                             Updated           Branch            Session         dae1a5b5-7dc1-4c…
+  ▏› dae1a5b5-7dc1-4cfe-bcd3-f4e8349cae0a     3 seconds ago     Not reported▕     Project         33ec830f9913565d
+                                                                                  Agent           mock-model
+                                                                                  Working direc…  /tmp/vsel/runs/f…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ browse  type filter  enter resume  esc stop search  ctrl+c quit
+

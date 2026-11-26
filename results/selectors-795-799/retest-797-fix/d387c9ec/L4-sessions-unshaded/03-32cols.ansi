@@ -1,0 +1,29 @@
+
+[1;2m› [0m[39m[49mPlum row cleanup
+
+
+[2m• [0m[39m[49mTest message 1Test message 2
+
+[1mSessions 18 · 18 ready[0;2m[39m[49m  tab: wai
+
+[0;1m[39m[49mAll[0m[39m[49m  [38;5;8mwaiting on you
+
+[39m [1m [0m[39m[49m [1mSession[0m[39m[49m                     [1mS
+[0m[39m[49m   ○ Synthetic parser fix      [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+[39m   ○ Pear ledger audit         [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+[1m[38;5;2m▏›[0m[39m[49m ○ Plum…leanup (on screen)   [1m[38;5;2mr
+▏[0m[39m[49m  [38;5;8m  orchard · Test message …[39m  [1m[38;5;8m4
+[0m[39m[49m   ○ Cedar count report        [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+[39m   ○ Orchard map refresh       [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+[39m   ○ Apple grade sorter        [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+[39m   ○ Quince inventory sync     [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+[39m   ○ Fig tree pruning plan     [38;5;2mr
+[39m   [38;5;8m  orchard · Test message …[39m  [38;5;8m1
+
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d

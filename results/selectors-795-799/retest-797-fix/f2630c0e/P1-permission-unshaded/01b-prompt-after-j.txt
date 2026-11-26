@@ -1,0 +1,32 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/vsel/runs/f2630c0e-P1-permission-unshaded/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› tidy the orchard
+
+
+• Test message 1Test message 2
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: rm -rf ./synthetic-build
+  rm -rf ./synthetic-build
+
+     1. Allow (y)
+  ▏› 2. Reject (esc)                                                                                                 ▕
+
+  Press enter to confirm or esc to reject
+
+
+
+

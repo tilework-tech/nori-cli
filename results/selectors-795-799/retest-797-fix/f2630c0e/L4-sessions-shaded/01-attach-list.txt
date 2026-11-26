@@ -1,0 +1,30 @@
+
+
+
+
+
+
+Sessions 18 · 18 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕
+▏    orchard · Test message 1Test message 2                                                 0s ago                     ▕
+   ○ Pear ledger audit                                                        mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+   ○ Plum row cleanup                                                         mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+   ○ Cedar count report                                                       mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+   ○ Orchard map refresh                                                      mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+   ○ Apple grade sorter                                                       mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+   ○ Quince inventory sync                                                    mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+   ○ Fig tree pruning plan                                                    mock-model    ready
+     orchard · Test message 1Test message 2                                                 0s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

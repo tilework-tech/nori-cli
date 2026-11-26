@@ -1,0 +1,1394 @@
+[
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "settings.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "settings.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "settings.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "pointer_beside_number",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "no_legacy_bullet",
+    "pr": 795,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "j_moves_down",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 3. Resize Reflow (on)                                                                                           ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "k_moves_up",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on)                                                                                     ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "footer_words",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move  / search  enter select  esc close']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on)                                                                                     ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['     2. Terminal Notifications (on)', '        Send OSC 9 escape sequences to notify the terminal on events', '     3. File Manager (not set)', '        Terminal file manager for the /browse command', '  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_result.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_result.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_result.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_ctrl_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_ctrl_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_slash_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-shaded",
+    "check": "search_slash_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "settings.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "settings.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "settings.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "pointer_beside_number",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "no_legacy_bullet",
+    "pr": 795,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "j_moves_down",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 3. Resize Reflow (on)                                                                                           ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "k_moves_up",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on)                                                                                     ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "footer_words",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move  / search  enter select  esc close']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on)                                                                                     ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['     2. Terminal Notifications (on)', '        Send OSC 9 escape sequences to notify the terminal on events', '     3. File Manager (not set)', '        Terminal file manager for the /browse command', '  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_result.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_result.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_result.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_ctrl_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_ctrl_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_slash_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_slash_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)                         ▕', '  ▏     Pin plan updates to a drawer in the viewport ins…▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "resize_60_to_40_rail_lines [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)', '  ▏     Pin plan updates to a drawer in', '  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)                         ▕', '  ▏     Pin plan updates to a drawer in the viewport ins…▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "resize_60_to_40_rail_lines [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)', '  ▏     Pin plan updates to a drawer in', '  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.current_marker",
+    "pr": 798,
+    "passed": true,
+    "detail": "  ▏› 1. Mock Default Model (current)                                                                                 ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Mock Default Model (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Mock Default Model (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.footer_offers_search",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move  / search  enter select  esc close']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.j_moves",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 2. Mock Fast Model                                                                                              ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "model.f_search_with_two_values",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ▏› 1. Mock Fast Model                                                                                              ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "config.no_search_in_footer",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move  enter select  esc close']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "config.f_does_not_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "thought.current_marker_on_focus",
+    "pr": 798,
+    "passed": true,
+    "detail": "  ▏› 2. Medium (current)                                                                                             ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "thought.no_bare_current",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "thought.three_values_no_search",
+    "pr": 799,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "agent.current_marker",
+    "pr": 798,
+    "passed": true,
+    "detail": "['  ▏› 1. Mock ACP (current)                                                                                           ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "agent.recording_toggle_hint [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move  enter select  shift-tab rec on  esc close']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L3-model-config-agent",
+    "check": "agent.no_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "grace.early_enter_ignored",
+    "pr": null,
+    "passed": true,
+    "detail": " Execute shell command?\n\n  Execute shell command\n  Command: rm -rf ./synthetic-build\n  rm -rf ./synthetic-build\n\n  ▏› 1. Allow (y)                                                                                                    ▕\n     2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n\n\n\n\n"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "header.command_shown",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt.shaded_bg_differs_from_unfocused_rows",
+    "pr": 797,
+    "passed": true,
+    "detail": "focus_bg=['434343'] other_bg=['2b2b2b']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt.shaded_marks_not_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt.full_row_contrast_against_panel",
+    "pr": 797,
+    "passed": true,
+    "detail": "[{'inside': ['434343'], 'outside': '2b2b2b'}]"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "label_not_green_or_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "j_moves",
+    "pr": 797,
+    "passed": true,
+    "detail": "  ▏› 2. Reject (esc)                                                                                                 ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt_after_j.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 24, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Reject (esc)                                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt_after_j.shaded_bg_differs_from_unfocused_rows",
+    "pr": 797,
+    "passed": true,
+    "detail": "focus_bg=['434343'] other_bg=['2b2b2b']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt_after_j.shaded_marks_not_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 24, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Reject (esc)                                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt_after_j.full_row_contrast_against_panel",
+    "pr": 797,
+    "passed": true,
+    "detail": "[{'inside': ['434343'], 'outside': '2b2b2b'}]"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "k_moves",
+    "pr": 797,
+    "passed": true,
+    "detail": "  ▏› 1. Allow (y)                                                                                                    ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "f_no_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-shaded",
+    "check": "late_enter_accepted",
+    "pr": null,
+    "passed": true,
+    "detail": "ori AI enhancements\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n• Permission: Allow Execute shell command\n\n• Permission granted with option: allow\n\n\n›\n\n  / commands · ! shell · @ files · ? help\n\n\n\n\n\n\n\n"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "grace.early_enter_ignored",
+    "pr": null,
+    "passed": true,
+    "detail": " Execute shell command?\n\n  Execute shell command\n  Command: rm -rf ./synthetic-build\n  rm -rf ./synthetic-build\n\n  ▏› 1. Allow (y)                                                                                                    ▕\n     2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n\n\n\n\n"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "header.command_shown",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt.unshaded_no_bg",
+    "pr": 797,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt.unshaded_marks_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "label_not_green_or_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "j_moves",
+    "pr": 797,
+    "passed": true,
+    "detail": "  ▏› 2. Reject (esc)                                                                                                 ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt_after_j.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 24, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Reject (esc)                                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt_after_j.unshaded_no_bg",
+    "pr": 797,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt_after_j.unshaded_marks_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 24, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Reject (esc)                                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "k_moves",
+    "pr": 797,
+    "passed": true,
+    "detail": "  ▏› 1. Allow (y)                                                                                                    ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "f_no_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P1-permission-unshaded",
+    "check": "late_enter_accepted",
+    "pr": null,
+    "passed": true,
+    "detail": "ori AI enhancements\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n• Permission: Allow Execute shell command\n\n• Permission granted with option: allow\n\n\n›\n\n  / commands · ! shell · @ files · ? help\n\n\n\n\n\n\n\n"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "approvals.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "approvals.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "approvals.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "red_warning_kept",
+    "pr": null,
+    "passed": true,
+    "detail": "['  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;', '  nothing else stops a harmful request.']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm.shaded_bg_differs_from_unfocused_rows",
+    "pr": 797,
+    "passed": true,
+    "detail": "focus_bg=['434343'] other_bg=['2b2b2b']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm.shaded_marks_not_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm.full_row_contrast_against_panel",
+    "pr": 797,
+    "passed": true,
+    "detail": "[{'inside': ['434343'], 'outside': '2b2b2b'}]"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm.j_moves",
+    "pr": 797,
+    "passed": true,
+    "detail": "  ▏› 2. Approve all, and stop asking me this  Skip this question next time                                           ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm_after_j.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Approve all, and stop asking me this  Skip this question next time                                           ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm_after_j.shaded_bg_differs_from_unfocused_rows",
+    "pr": 797,
+    "passed": true,
+    "detail": "focus_bg=['434343'] other_bg=['2b2b2b']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm_after_j.shaded_marks_not_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Approve all, and stop asking me this  Skip this question next time                                           ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm_after_j.full_row_contrast_against_panel",
+    "pr": 797,
+    "passed": true,
+    "detail": "[{'inside': ['434343'], 'outside': '2b2b2b'}]"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "label_not_green_or_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['434343'], 'other_bg': ['2b2b2b']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "footer_words",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move, enter confirm, esc go back']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-shaded",
+    "check": "end_key_in_short_prompt [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 1. Approve all                           Only for this session                                                  ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "approvals.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "approvals.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "approvals.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "red_warning_kept",
+    "pr": null,
+    "passed": true,
+    "detail": "['  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;', '  nothing else stops a harmful request.']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm.unshaded_no_bg",
+    "pr": 797,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm.unshaded_marks_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm.j_moves",
+    "pr": 797,
+    "passed": true,
+    "detail": "  ▏› 2. Approve all, and stop asking me this  Skip this question next time                                           ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm_after_j.rails_and_pointer",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Approve all, and stop asking me this  Skip this question next time                                           ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm_after_j.unshaded_no_bg",
+    "pr": 797,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm_after_j.unshaded_marks_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 1, 'text': '  ▏› 2. Approve all, and stop asking me this  Skip this question next time                                           ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "label_not_green_or_bold",
+    "pr": 797,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "footer_words",
+    "pr": 799,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move, enter confirm, esc go back']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "end_key_in_short_prompt [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 1. Approve all                           Only for this session                                                  ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "U1-small-popups",
+    "check": "slash.no_rails",
+    "pr": null,
+    "passed": true,
+    "detail": "['  /switch-skillset  switch between available skillsets', '  /browse           open a file manager to browse and edit files', '  /browser          open a Chrome browser the agent can control via CDP', '  /close            close (release) the current session and start a fresh chat', '  /resume           resume a previous session', '  /resume-viewonly  view a previous session transcript (read-only)']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "U1-small-popups",
+    "check": "at.no_rails",
+    "pr": null,
+    "passed": true,
+    "detail": "['  Agent        Mock ACP', \"  Run 'npx nori-skillsets init' to set up Nori AI enhancements\", '• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '› @pl', '  src/plum_rows.rs', '  src/pear_ledger.rs']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "U1-small-popups",
+    "check": "dollar.no_rails",
+    "pr": null,
+    "passed": true,
+    "detail": "['  System       /tmp/vsel/runs/d387c9ec-U1-small-popups/orchard', '  Agent        Mock ACP', \"  Run 'npx nori-skillsets init' to set up Nori AI enhancements\", '• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '› $', '  Enter send · Ctrl+J newline']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "attach_list.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['1d1d1d', 'default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "attach_list.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['1d1d1d', 'default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "attach_list.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['1d1d1d', 'default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "j_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Cedar count report                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "k_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Plum row cleanup                                                         mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "end_scrolls_to_last",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Chestnut roast timer                                                     mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "search_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Walnut shell tally                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "search_ctrl_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Fig tree pruning plan                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "search_slash",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Olive press checklist                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "on_screen_marker",
+    "pr": 798,
+    "passed": true,
+    "detail": "['› Plum row cleanup', '▏› ○ Plum row cleanup (on screen)                                             mock-model    ready                      ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "no_current_for_session",
+    "pr": 798,
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "60.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum…leanup (on screen)   mock-model    ready         ▕', '▏    orchard · Test message …  Mock D…Model  2s ago        ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "40.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum…leanup (on screen)   ready   ▕', '▏    orchard · Test message …  3s ago  ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "32.table_wider_than_terminal [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['', '', '• Test message 1Test message 2', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-shaded",
+    "check": "40.on_screen_kept_narrow",
+    "pr": 798,
+    "passed": true,
+    "detail": "▏› ○ Plum…leanup (on screen)   ready   ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "attach_list.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "attach_list.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "attach_list.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "j_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Cedar count report                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "k_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Plum row cleanup                                                         mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "end_scrolls_to_last",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Chestnut roast timer                                                     mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "search_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Walnut shell tally                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "search_ctrl_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Fig tree pruning plan                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "search_slash",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Olive press checklist                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "on_screen_marker",
+    "pr": 798,
+    "passed": true,
+    "detail": "['› Plum row cleanup', '▏› ○ Plum row cleanup (on screen)                                             mock-model    ready                      ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "no_current_for_session",
+    "pr": 798,
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "60.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum…leanup (on screen)   mock-model    ready         ▕', '▏    orchard · Test message …  Mock D…Model  2s ago        ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "40.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum…leanup (on screen)   ready   ▕', '▏    orchard · Test message …  3s ago  ▕']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "32.table_wider_than_terminal [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['', '', '• Test message 1Test message 2', '']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L4-sessions-unshaded",
+    "check": "40.on_screen_kept_narrow",
+    "pr": 798,
+    "passed": true,
+    "detail": "▏› ○ Plum…leanup (on screen)   ready   ▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "resume.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 4, 'x': 2, 'rows': 1, 'text': '  ▏› d69517cf-c298-4e2b-a929-eea5a3f05a3a     0 seconds ago     Not reported▕     Session         d69517cf-c298-4e…', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['242424', 'default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "resume.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['242424', 'default']"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "resume.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 4, 'x': 2, 'rows': 1, 'text': '  ▏› d69517cf-c298-4e2b-a929-eea5a3f05a3a     0 seconds ago     Not reported▕     Session         d69517cf-c298-4e…', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['242424', 'default']}"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "lists_all_18",
+    "pr": null,
+    "passed": true,
+    "detail": "18"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "j_moves",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› baf5363a-a20c-4645-889b-631906725931     1 second ago      Not reported▕     Agent           mock-model"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "k_moves",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 7ce1e26c-2712-41c3-9f8f-0f03aa854ce0     1 second ago      Not reported▕     Project         30b819bc110ee3ae"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "end_jumps_to_last",
+    "pr": 799,
+    "passed": true,
+    "detail": "  ▏› c67f444b-98e7-4047-b31f-c93807207de4     2 seconds ago     Not reported▕"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "home_jumps_to_first",
+    "pr": 799,
+    "passed": true,
+    "detail": "  ▏› d69517cf-c298-4e2b-a929-eea5a3f05a3a     2 seconds ago     Not reported▕     Session         d69517cf-c298-4e…"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "search_f",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› fe8eb1c5-75b4-4770-afce-605173d89dbe     3 seconds ago     Not reported▕     Project         30b819bc110ee3ae"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "search_ctrl_f",
+    "pr": 799,
+    "passed": true,
+    "detail": "  ▏› 0fb0cc33-6f8d-445a-8c7a-8ae7a645ecfa     5 seconds ago     Not reported▕     Project         30b819bc110ee3ae"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "search_slash",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› b922c9d2-59dc-4487-b497-372373411540     7 seconds ago     Not reported▕     Project         30b819bc110ee3ae"
+  },
+  {
+    "build": "d387c9ec",
+    "scenario": "L5-resume-picker",
+    "check": "stray_letter_does_not_filter",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  }
+]

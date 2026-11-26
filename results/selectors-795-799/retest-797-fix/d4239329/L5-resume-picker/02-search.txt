@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+  ⌕  4bfb9f                                                                       Details
+
+     Conversation                             Updated           Branch            Session         4bfb9f47-86ab-4c…
+  ▏› 4bfb9f47-86ab-4c50-ba2e-5198ffe6f160     3 seconds ago     Not reported▕     Project         f05440287d1870d1
+                                                                                  Agent           mock-model
+                                                                                  Working direc…  /tmp/vsel/runs/d…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ browse  type filter  enter resume  esc stop search  ctrl+c quit
+

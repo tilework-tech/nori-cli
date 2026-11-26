@@ -1,0 +1,30 @@
+
+› Plum row cleanup
+
+
+• Test message 1Test message 2
+
+Sessions 18 · 18 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                     Agent         Status
+   ○ Synthetic parser fix      mock-model    ready
+     orchard · Test message …                11s ago
+   ○ Pear ledger audit         mock-model    ready
+     orchard · Test message …                11s ago
+▏› ○ Plum…leanup (on screen)   mock-model    ready         ▕
+▏    orchard · Test message …  Mock D…Model  2s ago        ▕
+   ○ Cedar count report        mock-model    ready
+     orchard · Test message …                11s ago
+   ○ Orchard map refresh       mock-model    ready
+     orchard · Test message …                11s ago
+   ○ Apple grade sorter        mock-model    ready
+     orchard · Test message …                11s ago
+   ○ Quince inventory sync     mock-model    ready
+     orchard · Test message …                11s ago
+   ○ Fig tree pruning plan     mock-model    ready
+     orchard · Test message …                11s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you
+

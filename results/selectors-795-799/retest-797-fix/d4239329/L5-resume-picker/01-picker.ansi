@@ -1,0 +1,29 @@
+
+  [1mResume a previous session
+[0m[39m[49m  [38;5;8mSaved sessions for this working directory
+[39m                                                                                 [48;2;38;38;38m [1mDetails                          [0m[39m[48;2;38;38;38m
+[49m   [1m [0m[39m[49m [1mConversation[0m[39m[49m                             [1mUpdated[0m[39m[49m           [1mBranch[0m[39m[49m           [48;2;38;38;38m
+[49m  [38;5;2m[48;2;43;43;43m▏›[39m 761bf2cf-e9eb-46e7-be12-6551712140f2     0 seconds ago     Not reported[38;5;2m▕[39m[49m    [48;2;38;38;38m [38;5;8mSession       [39m  761bf2cf-e9eb-46…
+[49m  [48;2;36;36;36m   29f3bb63-dde7-4394-ac94-900581a014fe     0 seconds ago     Not reported [49m    [48;2;38;38;38m [38;5;8mProject       [39m  f05440287d1870d1
+[49m  [48;2;29;29;29m   dac45d4f-fdc1-49fd-902b-388c0a9e78cf     0 seconds ago     Not reported [49m    [48;2;38;38;38m [38;5;8mAgent         [39m  mock-model
+[49m  [48;2;36;36;36m   11d8fa58-a189-45b3-9388-36b6d88b1c44     0 seconds ago     Not reported [49m    [48;2;38;38;38m [38;5;8mWorking direc…[39m  /tmp/vsel/runs/d…
+[49m  [48;2;29;29;29m   a1d37f2e-9175-4f26-94d6-cc711cce8220     0 seconds ago     Not reported [49m    [48;2;38;38;38m [38;5;8mBranch        [39m  Not reported
+[49m  [48;2;36;36;36m   4bfb9f47-86ab-4c50-ba2e-5198ffe6f160     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;29;29;29m   ae7d1ec1-de37-4c63-b615-9854523f3a59     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;36;36;36m   beca0764-72bb-4f0e-861f-95545add3025     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;29;29;29m   5d5057e8-249e-405c-bc47-b0ef0fabb0e9     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;36;36;36m   93cd3aa4-acab-4080-a5e0-5fb6ce41b9c4     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;29;29;29m   6620fcb5-e4c4-4756-b7fa-d9c8b1e3dc56     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;36;36;36m   9f3a3e9c-eb6f-408a-93fc-88785b38db36     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;29;29;29m   08e56299-b898-4dc6-bad6-063bbe590d62     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;36;36;36m   7b18cbbf-bb99-44e2-aff9-8182bef47e54     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;29;29;29m   95386097-0e37-43d1-b369-9bb71db62e74     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;36;36;36m   53452fab-5d3e-4d2d-b69d-9949c72c7ce0     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;29;29;29m   4649a7c9-0b3f-49dc-b64c-5f7234d41009     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m  [48;2;36;36;36m   73c312ca-f8ca-4367-92f9-2cbde791fe68     0 seconds ago     Not reported [49m    [48;2;38;38;38m
+[49m                                                                                 [48;2;38;38;38m
+[49m                                                                                 [48;2;38;38;38m
+[49m                                                                                 [48;2;38;38;38m
+[49m                                                                                 [48;2;38;38;38m
+
+[49m  [38;5;2m↑↓/j/k[39m [38;5;8mbrowse  [38;5;2m/[39m [38;5;8msearch  [38;5;2menter[39m [38;5;8mresume  [38;5;2mesc[39m [38;5;8mstart new  [38;5;2mctrl+c[39m [38;5;8mquit
