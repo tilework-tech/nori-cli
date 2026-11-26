@@ -20,7 +20,9 @@ use unicode_width::UnicodeWidthStr;
 
 #[cfg(test)]
 mod profile;
+mod startup_face;
 mod status_card;
+pub(crate) use startup_face::StartupFace;
 pub(crate) mod status_view;
 
 pub use nori_harness::instruction_files::AgentKindSimple;
@@ -87,6 +89,9 @@ pub(crate) enum DisplayMode {
 pub(crate) struct NoriSessionHeaderCell {
     model: StatusViewModel,
     display_mode: DisplayMode,
+    /// The welcome header's face and wordmark. Other headers keep the plain
+    /// `› Nori CLI` title.
+    face: Option<StartupFace>,
 }
 
 impl NoriSessionHeaderCell {
@@ -94,7 +99,13 @@ impl NoriSessionHeaderCell {
         Self {
             model,
             display_mode: DisplayMode::Full,
+            face: None,
         }
+    }
+
+    pub(crate) fn with_face(mut self, face: StartupFace) -> Self {
+        self.face = Some(face);
+        self
     }
 
     pub(crate) fn with_display_mode(mut self, mode: DisplayMode) -> Self {
@@ -112,14 +123,15 @@ impl HistoryCell for NoriSessionHeaderCell {
 
         // The prompt marker is the sole Nori accent. The title and version use
         // ordinary text hierarchy and the block deliberately has no surface or border.
-        let mut lines: Vec<Line<'static>> = vec![
-            Line::from(vec![
+        let title = match &self.face {
+            Some(face) => face.title_line(self.model.version),
+            None => Line::from(vec![
                 Span::from("  › ").green(),
                 Span::from("Nori CLI").bold(),
                 Span::from(format!(" v{}", self.model.version)).dim(),
             ]),
-            Line::from(""),
-        ];
+        };
+        let mut lines: Vec<Line<'static>> = vec![title, Line::from("")];
 
         lines.extend(match self.display_mode {
             DisplayMode::Compact => status_card::compact_lines(&self.model, inner_width),
@@ -152,18 +164,20 @@ pub(crate) fn new_nori_status_output(model: StatusViewModel) -> CompositeHistory
 
 /// Create the Nori session info cell to be displayed at session start.
 ///
-/// The model carries the live agent status handle, so the welcome card shows
-/// the provider name immediately and fills in the agent's configuration as
-/// soon as the agent advertises it.
+/// The welcome card's title is `face`: the animated startup face, or the
+/// settled wordmark.
 pub(crate) fn new_nori_session_info(
     config: &NoriConfig,
     model: String,
     is_first_event: bool,
     view_model: StatusViewModel,
+    face: StartupFace,
 ) -> SessionInfoCell {
     SessionInfoCell::new(if is_first_event {
         // Header box rendered as history (so it appears at the very top)
-        let header = NoriSessionHeaderCell::new(view_model).with_display_mode(DisplayMode::Compact);
+        let header = NoriSessionHeaderCell::new(view_model)
+            .with_display_mode(DisplayMode::Compact)
+            .with_face(face);
 
         // Help lines below the header
         let mut help_lines: Vec<Line<'static>> = vec![];

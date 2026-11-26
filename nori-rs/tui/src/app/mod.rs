@@ -139,6 +139,8 @@ pub(crate) struct App {
     /// Whether the welcome card for the current conversation has already been
     /// written, ahead of the session that conversation will run on.
     welcome_card_written: bool,
+    /// The welcome card while the default session starts; see `startup_header`.
+    startup_header: Option<startup_header::StartupHeader>,
 
     /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
@@ -272,6 +274,7 @@ mod session_overview;
 mod session_resume;
 mod session_setup;
 mod session_view;
+mod startup_header;
 mod thought_setting;
 mod transcript_cells;
 pub(crate) use host_candidate::PreparedCatalog;
@@ -414,7 +417,18 @@ impl App {
         // pending resume replaces this widget before the user can read
         // anything, so its card belongs to the widget that takes over.
         if !cloud_mode && app.pending_session_activation.is_none() {
-            app.chat_widget.emit_welcome_card();
+            let face = if app.config.animations {
+                use rand::Rng;
+                crate::nori::session_header::StartupFace::new(
+                    std::time::Instant::now(),
+                    rand::rng().random_range(1..=3),
+                )
+            } else {
+                crate::nori::session_header::StartupFace::settled()
+            };
+            if let Some(card) = app.chat_widget.take_welcome_card(face.clone()) {
+                app.startup_header = Some(startup_header::StartupHeader::new(Arc::new(card), face));
+            }
             app.welcome_card_written = true;
         }
 
@@ -547,6 +561,7 @@ impl App {
             pending_session_activation: None,
             candidate_agent: None,
             welcome_card_written: false,
+            startup_header: None,
             loop_count_override: None,
             hotkey_config: nori_config::HotkeyConfig::default(),
             vim_mode: nori_config::VimEnterBehavior::Off,

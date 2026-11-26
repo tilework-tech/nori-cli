@@ -188,9 +188,11 @@ impl AgentStatus {
 
 /// A live handle to the agent status.
 ///
-/// The welcome card is written to history before the agent has advertised its
-/// configuration, so it holds the shared handle and fills in as soon as the
-/// configuration arrives. `/status` takes a fixed snapshot instead, because a
+/// The welcome card is built before the agent has advertised its
+/// configuration and holds the shared handle, so any later render of it shows
+/// the current configuration. In the inline view the startup card is written
+/// to the scrollback once; the configuration the agent resolves is announced
+/// on its own row. `/status` takes a fixed snapshot instead, because a
 /// command's output should not change after it was printed.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct AgentStatusHandle(Arc<RwLock<AgentStatus>>);

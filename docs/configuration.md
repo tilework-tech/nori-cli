@@ -150,7 +150,7 @@ Applies only to `nori sandbox`.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `animations` | boolean | `true` | Shimmer effects and spinners. |
+| `animations` | boolean | `true` | Shimmer effects, spinners, and Jiro's face on the startup welcome header. When `false`, the header shows the static wordmark at once. |
 | `resize_reflow` | boolean | `true` | Rebuild scrollback when the terminal width changes. |
 | `terminal_notifications` | `"enabled"`, `"disabled"` | `"enabled"` | Terminal notifications (OSC 9). |
 | `os_notifications` | `"enabled"`, `"disabled"` | `"enabled"` | Desktop notifications. |

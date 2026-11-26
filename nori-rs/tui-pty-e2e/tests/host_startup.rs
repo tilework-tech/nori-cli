@@ -180,8 +180,9 @@ fn a_positional_prompt_start_writes_one_welcome_card() {
     tui.wait_for_text("amber is answering (1).", TIMEOUT)
         .unwrap();
     tui.wait_for_text("Amber options", TIMEOUT).unwrap();
+    tui.wait_for_text("〉nori CLI v", TIMEOUT).unwrap();
     let screen = tui.screen_contents();
-    assert_eq!(screen.matches("Nori CLI v").count(), 1, "{screen}");
+    assert_eq!(screen.matches("〉nori CLI").count(), 1, "{screen}");
 }
 
 #[test]

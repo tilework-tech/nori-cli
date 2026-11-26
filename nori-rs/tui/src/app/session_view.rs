@@ -230,7 +230,13 @@ impl App {
         tui: &mut tui::Tui,
         cell: Box<dyn HistoryCell>,
     ) {
-        let cell: Arc<dyn HistoryCell> = cell.into();
+        if let Some(cell) = self.hold_under_startup_header(tui, cell.into()) {
+            self.append_history_cell(tui, cell);
+        }
+    }
+
+    /// Add a cell to the transcript and print it, below everything before it.
+    pub(super) fn append_history_cell(&mut self, tui: &mut tui::Tui, cell: Arc<dyn HistoryCell>) {
         if let Some(Overlay::Transcript(t)) = &mut self.overlay {
             t.insert_cell(cell.clone());
             tui.frame_requester().schedule_frame();
@@ -268,6 +274,8 @@ impl App {
         source: String,
         cwd: std::path::PathBuf,
     ) {
+        // The stream being consolidated may still be held under the header.
+        self.commit_startup_header(tui);
         let consolidation = crate::transcript_reflow::agent_message_consolidation(
             &self.transcript_cells,
             source,

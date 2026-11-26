@@ -92,7 +92,9 @@ impl ChatWidget {
         self.status_view_model(self.agent_status.clone())
     }
 
-    /// Write the welcome card now, before any agent session exists.
+    /// The welcome card for now, before any agent session exists, titled
+    /// with `face`. The app shows it at the top of the screen while the
+    /// session starts and writes it to the history once the face settles.
     ///
     /// Lazy activation does not send `session/new` until the first prompt, so
     /// waiting for `SessionStarted` leaves the session with no card at all
@@ -102,20 +104,24 @@ impl ChatWidget {
     /// row; `on_session_started` then announces the model and options the
     /// agent resolved.
     ///
-    /// No-op once the card has been written, so the agent-switch path (whose
+    /// `None` once the card has been taken, so the agent-switch path (whose
     /// candidate widget is hidden until it publishes `SessionStarted`) still
     /// gets its card at session start.
-    pub(crate) fn emit_welcome_card(&mut self) {
+    pub(crate) fn take_welcome_card(
+        &mut self,
+        face: crate::nori::session_header::StartupFace,
+    ) -> Option<crate::history_cell::SessionInfoCell> {
         if !self.show_welcome_banner {
-            return;
+            return None;
         }
         self.show_welcome_banner = false;
-        self.add_to_history(crate::history_cell::new_session_info(
+        Some(crate::history_cell::new_session_info(
             &self.config,
             self.config.active_agent.clone(),
             true,
             self.live_status_view_model(),
-        ));
+            face,
+        ))
     }
 
     /// Take over a conversation whose welcome card is already in the
