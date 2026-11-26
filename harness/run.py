@@ -5526,6 +5526,161 @@ SCENARIOS.update({
 
 CAP = "[tui]\ntool_output_max_lines = 10"
 NO_UPDATE = "check_for_update_on_startup = false"
+
+R09B_ROW = re.compile(r"(\S(?:.*?\S)?)\s{2,}~[\d,]+")
+
+
+def r09b_context_rows(text):
+    rows = []
+    for line in text.splitlines():
+        for m in R09B_ROW.finditer(line):
+            label = m.group(1).strip()
+            if label.endswith(".md") or "\u2026" in label or "..." in label:
+                rows.append(label)
+    return rows
+
+
+def r09b_context_names(ctx):
+    """#792 on real attach: several instruction files with long, similar paths stay distinct and keep their file names in /context, at 120 and 60 columns."""
+    deep = ctx.fx["roots"]["beta"] / "workbench-harbor-charts" / "northern-estuary-soundings" / "tidewater-beacon-survey"
+    (deep / ".claude").mkdir(parents=True)
+    files = {
+        "session CLAUDE.md": deep / "CLAUDE.md",
+        "session CLAUDE.local.md": deep / "CLAUDE.local.md",
+        "session .claude/CLAUDE.md": deep / ".claude" / "CLAUDE.md",
+        "parent CLAUDE.md": deep.parent / "CLAUDE.md",
+        "host home .claude/CLAUDE.md": ctx.fx["homes"]["host"] / ".claude" / "CLAUDE.md",
+    }
+    for i, (label, f) in enumerate(files.items()):
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"# {label}\n" + "Keep the beacon lit. " * (3 + 4 * i) + "\n")
+    decoy = ctx.fx["homes"]["laptop"] / ".claude" / "CLAUDE.md"
+    decoy.parent.mkdir(parents=True, exist_ok=True)
+    decoy.write_text("# laptop decoy LAPTOPDECOY\n")
+    endpoint, _ = ctx.start_host()
+    out = ctx.nori("host", "new", "--prompt", "relay 1 dawn", cwd=deep)
+    sid = out.stdout.strip().splitlines()[-1].strip()
+    wait_ledger(ctx, lambda r: r["kind"] == "turn_end")
+    proxy = Proxy(endpoint)
+    b = ctx.term("remote", home="laptop")
+    j_open(ctx, b, sid, via=proxy)
+    b.wait_for("dawn relay finished.", 15)
+    b.keys("M-t")
+    time.sleep(1)
+    for cols in (120, 60):
+        resize(b, cols, 36)
+        b.type("/context")
+        b.keys("Enter")
+        time.sleep(0.6)
+        if r_composer(b).strip().endswith("/context"):
+            b.keys("Enter")
+        time.sleep(2.5)
+        b.capture(f"context-{cols}")
+        hist = r_inline_history(b)
+        tail = hist[hist.rfind("/context"):]
+        rows = r09b_context_rows(tail)
+        (ctx.dir / f"rows-{cols}.json").write_text(json.dumps(rows, indent=2))
+        ctx.check(f"context{cols}.runs_in_attach", NOT_ON_HOST not in tail, tail[:300])
+        ctx.check(f"context{cols}.five_instruction_rows", len(rows) == 5, rows)
+        ctx.check(f"context{cols}.rows_distinct", len(set(rows)) == len(rows), rows)
+        ctx.check(f"context{cols}.each_row_ends_with_its_file_name",
+                  sorted(r.rsplit("/", 1)[-1] for r in rows) == sorted(["CLAUDE.md"] * 4 + ["CLAUDE.local.md"]), rows)
+        ctx.check(f"context{cols}.hidden_claude_folder_visible", sum(".claude/CLAUDE.md" in r for r in rows) == 2, rows)
+        ctx.check(f"context{cols}.client_decoy_absent", "LAPTOPDECOY" not in tail and str(decoy) not in tail)
+        b.keys("C-l")
+        time.sleep(1.0)
+    proxy.close()
+
+
+SCENARIOS.update({"R09b": ("#792: distinct long instruction paths keep their file names in /context", r09b_context_names)})
+
+
+def s41h_poll_at(t, query, want, label, timeout=6.0):
+    """Type `query` at once and poll: ms until `want` shows, and every other file or `no matches` seen on the way."""
+    t.keys("C-u")
+    t0 = time.monotonic()
+    t.type(query)
+    seen, got, nomatch = set(), None, False
+    while time.monotonic() - t0 < timeout:
+        sc = t.screen()
+        seen |= files_of(sc)
+        nomatch |= re.search(r"(?i)no matches", sc) is not None
+        if want in sc and got is None:
+            got = round((time.monotonic() - t0) * 1000)
+            time.sleep(0.4)
+            sc = t.screen(); seen |= files_of(sc)
+            break
+        time.sleep(0.03)
+    t.capture(label)
+    t.keys("C-u")
+    return {"want": want, "shown_ms": got, "files_seen": sorted(seen), "no_matches_seen": nomatch}
+
+
+def s41h_at_host_only_without_delay(ctx):
+    """#791 L3: `@` with no session asks the host, typed as soon as the composer appears; then right after /new DIR and Alt+S."""
+    ctx.start_host(cwd="alpha", log=True)
+    c = remote_attach(ctx, "controller")
+    screen = c.wait_for(r"(Sessions|›)", 20, regex=True)
+    if "No sessions yet" in screen or "Sessions" in screen:
+        c.keys("Escape")
+    c.wait_for("›", 10)
+    r0 = s41h_poll_at(c, "@lan", "lantern_wick", "0-at-no-session-immediate")
+    ctx.check("h.no_session_at_shows_host_file", r0["shown_ms"] is not None, r0)
+    ctx.check("h.no_session_at_never_client_file", "decoy_laptop" not in r0["files_seen"], r0)
+    r0b = s41h_poll_at(c, "@decoy", "decoy_laptop", "0b-at-client-only-name", timeout=3.0)
+    ctx.check("h.no_session_client_only_name_not_offered", r0b["shown_ms"] is None, r0b)
+    beta = ctx.fx["roots"]["beta"]
+    news = len(ctx.ledger("request", "session/new"))
+    c.keys("C-u"); c.type(f"/new {beta}"); time.sleep(0.8); c.keys("Enter"); time.sleep(0.3)
+    if re.search(r"^\s*›?\s*/new\b", c.screen(), re.M):
+        c.keys("Enter")
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    r1 = s41h_poll_at(c, "@harb", "harbor_tide", "1-at-right-after-new-beta")
+    ctx.check("h.after_new_dir_at_follows_beta", r1["shown_ms"] is not None and not ({"lantern_wick", "decoy_laptop"} & set(r1["files_seen"])), r1)
+    r1b = s41h_poll_at(c, "@lan", "lantern_wick", "1b-at-alpha-name-in-beta", timeout=3.0)
+    ctx.check("h.after_new_dir_old_folder_not_offered", r1b["shown_ms"] is None, r1b)
+    new_session_typed(ctx, c, f"/new {ctx.fx['roots']['alpha']}")
+    visits = []
+    # The picker opens on the current row (alpha, created last). Up opens beta; from there Down opens alpha.
+    for i, (key, want) in enumerate((("Up", "beta"), ("Down", "alpha"))):
+        c.keys("C-u"); c.keys("M-s"); time.sleep(1.2)
+        c.keys(key); time.sleep(0.3)
+        c.capture(f"2-switch-{i}-list")
+        c.keys("Enter")
+        first, other = (("@harb", "harbor_tide"), ("@lan", "lantern_wick")) if want == "beta" else (("@lan", "lantern_wick"), ("@harb", "harbor_tide"))
+        a = s41h_poll_at(c, *first, f"2-switch-{i}-{want}-own", timeout=4.0)
+        b = s41h_poll_at(c, *other, f"2-switch-{i}-{want}-other", timeout=3.0)
+        visits.append({"want": want, "own": a, "other": b})
+    (ctx.dir / "visits.json").write_text(json.dumps([r0, r0b, r1, r1b, visits], indent=2))
+    ok = all(v["own"]["shown_ms"] is not None and v["other"]["shown_ms"] is None for v in visits)
+    ctx.check("h.after_alt_s_at_follows_switched_session", ok, visits)
+    ctx.check("h.never_client_files", not any("decoy_laptop" in v[k]["files_seen"] for v in visits for k in ("own", "other")), visits)
+
+
+SCENARIOS.update({"S41h": ("#791: host-only @ with no session, right after /new DIR and after Alt+S, with no settle delay", s41h_at_host_only_without_delay)})
+
+
+def s35r_agent_commands_alone(ctx):
+    """#791 L2 in isolation: agent commands typed in attach go to the agent once, with and without arguments."""
+    agent_commands_on(ctx)
+    ctx.start_host()
+    t = start_attach(ctx, "controller")
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    time.sleep(1.0)
+    for text in ["/review the parser", "/review", "/lanternize now"]:
+        before = prompt_texts(ctx).count(text)
+        run_typed(t, text, settle=0.5)
+        wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and r.get("text") == text, timeout=10)
+        time.sleep(1.5)
+        slug = text.replace("/", "").replace(" ", "_")
+        t.capture(f"after-{slug}")
+        sent = prompt_texts(ctx).count(text) - before
+        ctx.check(f"r.{slug}_sent_once", sent == 1, {"sent": sent, "prompts": prompt_texts(ctx)[-3:], "composer": composer_text(t.screen())})
+
+
+SCENARIOS.update({"S35r": ("#791 L2: agent commands with and without arguments reach the agent once", s35r_agent_commands_alone)})
+
 FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "R12": {"top_extra": NO_UPDATE}, "R13": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 

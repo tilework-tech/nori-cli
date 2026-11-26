@@ -212,6 +212,20 @@ def probe_history():
         check("history", "out_of_range_offset_is_not_a_crash", "result" in r or "error" in r, r)
         r = ctl.call("_nori/host/history/add", {"sessionId": "00000000-0000-4000-8000-00000000dead", "text": "ghost"})
         check("history", "unknown_session_add_refused", "error" in r, r)
+        check("history", "unknown_session_add_-32002", err(r) == -32002, r)
+        r = ctl.call("_nori/host/history/add", {"sessionId": "not-a-session-id", "text": "malformed ghost"})
+        check("history", "malformed_session_add_-32002", err(r) == -32002, r)
+        r = watcher.call("_nori/host/history/add", {"sessionId": "00000000-0000-4000-8000-00000000dead", "text": "watcher ghost"})
+        check("history", "watcher_unknown_session_still_-32016", err(r) == -32016, r)
+        m2 = (watcher.call("_nori/host/history/metadata", {}).get("result") or {})
+        check("history", "refused_adds_leave_count_unchanged", m2.get("entryCount") == n1, [m1, m2])
+        text = hp.read_text() if hp.exists() else ""
+        check("history", "refused_adds_not_written", "ghost" not in text, text[-300:])
+        r = ctl.call("_nori/host/history/add", {"sessionId": sid, "text": "lighthouse after refusal"})
+        m3 = (watcher.call("_nori/host/history/metadata", {}).get("result") or {})
+        s2 = json.dumps(watcher.call("_nori/host/history/search", {"maxResults": 50}))
+        check("history", "valid_add_after_refusal_recorded_and_searchable",
+              "result" in r and m3.get("entryCount") == n1 + 1 and "lighthouse after refusal" in s2, [r, m3])
 
 
 # -------------------------------------------------------------- prompts (#780)

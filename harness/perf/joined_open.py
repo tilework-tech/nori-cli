@@ -76,7 +76,28 @@ def audit(hist, sections):
             "mark_count": len(marks), "dup_marks": len(marks) - len(set(marks)),
             "opening": hist.count("KilnOpening"), "latest": hist.count("KilnLatestEnd"),
             "closing_090": hist.count("Closing note 090"),
-            "disconnect_rows": hist.count("Lost the connection") + hist.count("Connection lost")}
+            "disconnect_rows": hist.count("Lost the connection") + hist.count("Connection lost"),
+            **plan_audit(hist, sections)}
+
+
+def plan_audit(hist, sections):
+    """Each plan update (every 5th section) shows once, between its own reply and the next one."""
+    lines = hist.splitlines()
+    pos = {}
+    for n, line in enumerate(lines):
+        for m in MARK.finditer(line):
+            pos.setdefault(int(m.group(1)), n)
+    want = [i for i in range(5, sections + 1, 5)]
+    counts, misplaced = {}, []
+    for i in want:
+        rows = [n for n, line in enumerate(lines) if re.search(rf"Record batch {i}\b", line)]
+        counts[i] = len(rows)
+        lo, hi = pos.get(i, -1), pos.get(i + 1, len(lines))
+        if not rows or not all(lo < n < hi for n in rows):
+            misplaced.append(i)
+    return {"plans_expected": len(want), "plans_once": sum(c == 1 for c in counts.values()),
+            "plan_dups": sum(max(c - 1, 0) for c in counts.values()), "plans_misplaced": misplaced[:10],
+            "plans_misplaced_count": len(misplaced)}
 
 
 def sample(label, binary, joined, sections, workdir, cols, rows):
@@ -112,7 +133,11 @@ def sample(label, binary, joined, sections, workdir, cols, rows):
                 if out["alt_screen_at_open"]:
                     pane.tmux("send-keys", "-t", "k", "C-l")
                     pane.settle(0.8)
-                out["audit"] = audit(pane.history(), sections)
+                hist = pane.history()
+                out["audit"] = audit(hist, sections)
+                if os.environ.get("JO_SAVE_HISTORY"):
+                    keep = Path(os.environ["JO_SAVE_HISTORY"]); keep.mkdir(parents=True, exist_ok=True)
+                    (keep / f"{label}-{sections}-{uuid.uuid4().hex[:6]}.txt").write_text(hist)
             out["final_screen"] = pane.screen()
         finally:
             pane.close()
