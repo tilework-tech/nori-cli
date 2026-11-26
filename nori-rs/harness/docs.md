@@ -92,6 +92,10 @@ The session runtime must not depend on `nori-host-runtime`, `nori-tui`,
   dropped clients that only paused briefly.
 - Remote and local mutations go through the same typed handle methods, so
   hooks, transcripts, goals, and permission policy always apply.
+- `managed_remote/shell.rs` runs every `_nori/session/shell` it receives. The
+  transport (`nori-rs/acp-host/docs.md`) refuses it first for watchers and
+  for clients not on the host's machine, so only a local controller's call
+  arrives here.
 - Goal completion is proven only by `update_goal` on the `nori-client` MCP
   server (`backend/nori_client_mcp.rs`), never by a similarly named agent tool.
 - Steering is gated by an adapter capability (`_meta.steering.supported`) plus
