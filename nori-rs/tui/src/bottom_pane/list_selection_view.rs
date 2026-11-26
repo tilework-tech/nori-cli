@@ -7,6 +7,7 @@ use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuItemTone;
 use nori_tui_components::MenuPlacement;
 use nori_tui_components::MenuRowPattern;
+use nori_tui_components::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -25,7 +26,7 @@ use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
+use crate::style::user_message_style_for;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -685,10 +686,22 @@ impl Renderable for ListSelectionView {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.render_for_background(area, buf, crate::style::relative_terminal_background());
+    }
+}
+
+impl ListSelectionView {
+    /// Render for a terminal whose background is `terminal_bg`, or `None`
+    /// when the terminal does not report one.
+    pub(crate) fn render_for_background(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        terminal_bg: Option<(u8, u8, u8)>,
+    ) {
         if area.height == 0 || area.width == 0 {
             return;
         }
-
         let effective_hint = self.effective_footer_hint();
         let [content_area, footer_area] = Layout::vertical([
             Constraint::Fill(1),
@@ -697,7 +710,7 @@ impl Renderable for ListSelectionView {
         .areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(user_message_style_for(terminal_bg))
             .render(content_area, buf);
 
         let header_height = self
@@ -748,7 +761,13 @@ impl Renderable for ListSelectionView {
                 &self.state,
                 list_area.height as usize,
                 "no matches",
-                crate::style::component_theme(),
+                {
+                    let theme = Theme::for_terminal_background(terminal_bg);
+                    Theme {
+                        selected: theme.selected_on_panel,
+                        ..theme
+                    }
+                },
             );
         }
 

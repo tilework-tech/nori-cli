@@ -41,7 +41,7 @@ pub fn user_message_bg(terminal_bg: (u8, u8, u8)) -> Color {
     Color::Rgb(red, green, blue)
 }
 
-fn relative_terminal_background() -> Option<(u8, u8, u8)> {
+pub(crate) fn relative_terminal_background() -> Option<(u8, u8, u8)> {
     supports_color::on_cached(supports_color::Stream::Stdout)
         .filter(|level| level.has_16m)
         .and_then(|_| default_bg())

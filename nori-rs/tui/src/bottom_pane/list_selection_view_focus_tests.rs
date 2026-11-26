@@ -135,3 +135,52 @@ fn prompt_focus_snapshot() {
         .join("\n");
     insta::assert_snapshot!(text);
 }
+
+fn render_on(view: &ListSelectionView, width: u16, background: Option<(u8, u8, u8)>) -> Buffer {
+    let area = Rect::new(0, 0, width, view.desired_height(width));
+    let mut buf = Buffer::empty(area);
+    view.render_for_background(area, &mut buf, background);
+    buf
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn on_a_shaded_terminal_the_focused_row_differs_from_the_panel_across_the_row() {
+    let buf = render_on(&prompt(), 48, Some((20, 20, 20)));
+    let title = row_of(&buf, "Run a synthetic command?");
+    let focused = row_of(&buf, "Allow once");
+    let other = row_of(&buf, "Deny");
+    let panel = buf[(column_of(&buf, title, "Run"), title)].bg;
+    let left = column_of(&buf, focused, "▏");
+    let right = column_of(&buf, focused, "▕");
+
+    assert_eq!(panel, Color::Rgb(43, 43, 43));
+    for x in left..=right {
+        assert_ne!(buf[(x, focused)].bg, panel, "cell {x} of the focused row");
+    }
+    assert_eq!(buf[(column_of(&buf, other, "Deny"), other)].bg, panel);
+    assert_eq!(
+        marks(&buf, focused),
+        vec![
+            ("▏".to_string(), Color::Green, false),
+            ("›".to_string(), Color::Green, false),
+            ("▕".to_string(), Color::Green, false),
+        ]
+    );
+}
+
+#[test]
+fn on_an_unshaded_terminal_the_focused_marks_are_bold_and_nothing_is_shaded() {
+    let buf = render_on(&prompt(), 48, None);
+    let focused = row_of(&buf, "Allow once");
+
+    assert_eq!(
+        marks(&buf, focused)
+            .into_iter()
+            .map(|(_, _, bold)| bold)
+            .collect::<Vec<_>>(),
+        vec![true, true, true]
+    );
+    let label = column_of(&buf, focused, "Allow once");
+    assert_eq!(buf[(label, focused)].bg, Color::Reset);
+}

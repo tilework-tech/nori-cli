@@ -69,3 +69,25 @@ fn terminal_theme_derives_close_surfaces_from_light_background() {
     assert_eq!(theme.input.bg, Some(Color::Rgb(220, 220, 220)));
     assert_eq!(theme.selected.bg, Some(Color::Rgb(216, 216, 216)));
 }
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn a_focused_row_on_a_raised_panel_stands_out_from_the_panel() {
+    for background in [(20, 20, 20), (240, 240, 240)] {
+        let theme = Theme::for_terminal_background(Some(background));
+        let panel = relative_surface(background, 10);
+
+        assert_ne!(theme.selected_on_panel.bg, Some(panel), "{background:?}");
+        assert_ne!(
+            theme.selected_on_panel.bg, theme.selected.bg,
+            "{background:?}"
+        );
+    }
+    assert_eq!(
+        Theme::for_terminal_background(Some((20, 20, 20)))
+            .selected_on_panel
+            .bg,
+        Some(Color::Rgb(67, 67, 67))
+    );
+    assert_eq!(Theme::default().selected_on_panel.bg, None);
+}
