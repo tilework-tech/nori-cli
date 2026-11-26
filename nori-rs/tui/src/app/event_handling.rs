@@ -123,6 +123,11 @@ impl App {
                 TuiEvent::Draw => {
                     self.adopt_delegated_sessions(tui);
                     self.refresh_session_overview(tui.terminal.size()?.width);
+                    if self.chat_widget.session_list_in_front() {
+                        // The list's "Ns ago" ages advance with the clock alone.
+                        tui.frame_requester()
+                            .schedule_frame_in(std::time::Duration::from_secs(1));
+                    }
                     self.refresh_joined_session_status();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);

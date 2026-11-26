@@ -470,3 +470,35 @@ fn a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not()
         .expect("a transcript fork still needs another process slot");
     ask(&mut session, "still here after refused fork", ANSWER);
 }
+
+/// An open session list keeps its "Ns ago" labels current while nothing else
+/// changes, redrawing once a second rather than continuously.
+#[test]
+#[cfg(target_os = "linux")]
+fn an_idle_open_session_list_ticks_its_ages_without_redrawing_continuously() {
+    let mut session = spawn_with(config("[tui]\nmax_sessions = 2\n"));
+    ask(&mut session, "first question", ANSWER);
+    start_new_session(&mut session, "2 ready");
+    ask(&mut session, "second question", ANSWER);
+    open_list(&mut session, "Sessions 2");
+    session.settle(Duration::from_millis(300));
+
+    let before = session.raw_output().len();
+    session
+        .wait_for(
+            |screen| (3..=9).any(|age| screen.contains(&format!("{age}s ago"))),
+            Duration::from_secs(8),
+        )
+        .expect("the ages advance while the list stays open");
+    let start = std::time::Instant::now();
+    let written_before = session.raw_output().len();
+    session.settle(Duration::from_secs(2));
+    let written = session.raw_output().len() - written_before;
+
+    assert!(session.raw_output().len() > before);
+    assert!(
+        written < 16 * 1024,
+        "an idle session list wrote {written} bytes in {:?}",
+        start.elapsed()
+    );
+}
