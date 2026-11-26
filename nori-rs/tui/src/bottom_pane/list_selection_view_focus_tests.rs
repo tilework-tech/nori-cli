@@ -183,6 +183,7 @@ fn on_an_unshaded_terminal_the_focused_marks_are_bold_and_nothing_is_shaded() {
     );
     let label = column_of(&buf, focused, "Allow once");
     assert_eq!(buf[(label, focused)].bg, Color::Reset);
+}
 
 fn footer(view: &ListSelectionView) -> String {
     let buf = render(view, 100);
