@@ -119,7 +119,12 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   A refused builtin command stays in the composer as `/command`; a command
   the composer does not know goes to the agent as a prompt. With no session
   on screen, `@` asks a joined host that serves `find_paths` to search its own
-  folder (`app/file_mentions.rs`); otherwise it searches the session on screen. A
+  folder (`app/file_mentions.rs`); otherwise it searches the session on screen.
+  Both searchers (`host_client/file_search.rs`, `file_search.rs`) skip a query
+  only while the same one is still in flight or scheduled; once it lands, the
+  same text asked again is searched again, so a popup reopened on unchanged
+  text gets an answer. The composer reports a query only when its file popup
+  needs one (a new popup or changed text), not on Up/Down through matches. A
   joined watcher's submission is refused with the draft kept, and Alt+T sends
   `AppEvent::TakeHostControl`. Ctrl+C goes to `ChatWidget::joined_ctrl_c`
   first: only a connected controller cancels, including a turn another
@@ -156,6 +161,11 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   Markdown cell goes through `TranscriptCells::replace_tail`, so only the
   replaced cells re-wrap; bumping the transcript generation instead re-wraps
   the whole history and made a long `nori attach` replay crawl.
+- `streaming/controller.rs` renders streamed Markdown only on a commit tick
+  or at finalize, where lines become visible; a chunk with a newline just
+  marks a line finished. Live output is unchanged (one line per tick, a
+  partial line waits for its newline), and a replay burst that finishes a
+  reply between ticks renders it once instead of once per chunk.
 - `transcript_reflow::agent_message_consolidation` replaces a reply's cells
   only when the trailing run reaches the reply's first cell. If another cell
   (such as a plan update) cut into the stream, the cells stay as streamed, so

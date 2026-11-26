@@ -83,8 +83,8 @@ impl FileSearchManager {
         {
             #[expect(clippy::unwrap_used)]
             let mut st = self.state.lock().unwrap();
-            if query == st.latest_query {
-                // No change, nothing to do.
+            if query == st.latest_query && (st.is_search_scheduled || st.active_search.is_some()) {
+                // That search is still coming.
                 return;
             }
 
@@ -177,14 +177,11 @@ impl FileSearchManager {
             .map(|res| res.matches)
             .unwrap_or_default();
 
-            let is_cancelled = cancellation_token.load(Ordering::Relaxed);
-            if !is_cancelled {
-                tx.send(AppEvent::FileSearchResult { query, matches });
-            }
-
-            // Reset the active search state. Do a pointer comparison to verify
-            // that we are clearing the ActiveSearch that corresponds to the
-            // cancellation token we were given.
+            // Reset the active search state before answering, so the same
+            // query asked again once the answer is shown searches again. Do a
+            // pointer comparison to verify that we are clearing the
+            // ActiveSearch that corresponds to the cancellation token we were
+            // given.
             {
                 #[expect(clippy::unwrap_used)]
                 let mut st = search_state.lock().unwrap();
@@ -194,6 +191,50 @@ impl FileSearchManager {
                     st.active_search = None;
                 }
             }
+
+            let is_cancelled = cancellation_token.load(Ordering::Relaxed);
+            if !is_cancelled {
+                tx.send(AppEvent::FileSearchResult { query, matches });
+            }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    use super::*;
+
+    fn next_result(rx: &mut UnboundedReceiver<AppEvent>) -> Option<(String, Vec<String>)> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            match rx.try_recv() {
+                Ok(AppEvent::FileSearchResult { query, matches }) => {
+                    return Some((query, matches.into_iter().map(|m| m.path).collect()));
+                }
+                Ok(_) => {}
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn a_query_asked_again_after_its_answer_is_answered_again() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("lexer.rs"), "synthetic").unwrap();
+        let (tx, mut rx) = unbounded_channel();
+        let manager = FileSearchManager::new(dir.path().to_path_buf(), AppEventSender::new(tx));
+
+        manager.on_user_query("lex".to_string());
+        let first = next_result(&mut rx);
+        manager.on_user_query("lex".to_string());
+        let second = next_result(&mut rx);
+
+        let answer = Some(("lex".to_string(), vec!["lexer.rs".to_string()]));
+        assert_eq!((first, second), (answer.clone(), answer));
     }
 }
