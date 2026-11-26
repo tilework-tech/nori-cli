@@ -124,7 +124,8 @@ From the shell:
 different agent is an error. Aliases of the same agent are accepted.
 
 Picker keys: Enter resumes, Esc starts a fresh session, Ctrl+C exits,
-Up/Down or j/k move, PgUp/PgDn page, `/` or `f` searches.
+Up/Down or j/k move, PgUp/PgDn page, Home/End jump, `/`, `f`, or Ctrl+F
+searches.
 
 From inside the TUI:
 
@@ -457,8 +458,11 @@ or `!` line. Turn it off with the `composer_hints` footer segment
 
 In the transcript overlay, `q`, Ctrl+C, Ctrl+T, or Ctrl+O closes it.
 
-In every picker: Up/Down or j/k move, PgUp/PgDn and Home/End page, `/`, `f`,
-or Ctrl+F searches, and Esc ends the search.
+In every picker: Up/Down or j/k move, PgUp/PgDn and Home/End page, and
+typing filters only during a search. Lists with search (`/settings`,
+`/sessions`, `/resume`, `/model`, skillsets) start one with `/`, `f`, or Ctrl+F,
+show `/ search` in their footer, and Esc ends the search. Short lists such as
+`/agent` and `/config` have no search.
 
 ### Approval overlay
 

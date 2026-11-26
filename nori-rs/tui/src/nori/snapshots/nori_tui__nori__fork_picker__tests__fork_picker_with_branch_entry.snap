@@ -10,4 +10,4 @@ expression: "render_lines(&view, 60)"
   ▏› 1. ⎇ Branch from current point                      ▕  
      2. an earlier message                                  
                                                             
-  ↑/k ↓/j to navigate, enter to confirm, esc to go back
+  ↑↓/j/k move, enter confirm, esc go back

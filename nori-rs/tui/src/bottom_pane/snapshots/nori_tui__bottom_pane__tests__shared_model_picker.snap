@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/mod.rs
+assertion_line: 1285
 expression: model_render
 ---
                                                                                                     
@@ -18,4 +19,4 @@ expression: model_render
         experimental                                                                                
      4. Use custom model...                                                                         
         Enter any model ID                                                                          
-  ↑↓/j/k move  enter select  esc close
+  ↑↓/j/k move  / search  enter select  esc close

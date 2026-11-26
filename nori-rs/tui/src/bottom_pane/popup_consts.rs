@@ -18,10 +18,10 @@ pub(crate) const MAX_COMMAND_POPUP_ROWS: usize = 10;
 /// Includes j/k vim-style navigation hint.
 pub(crate) fn standard_popup_hint_line() -> Line<'static> {
     Line::from(vec![
-        "↑/k ↓/j to navigate, ".into(),
+        "↑↓/j/k move, ".into(),
         key_hint::plain(KeyCode::Enter).into(),
-        " to confirm, ".into(),
+        " confirm, ".into(),
         key_hint::plain(KeyCode::Esc).into(),
-        " to go back".into(),
+        " go back".into(),
     ])
 }

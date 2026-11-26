@@ -183,4 +183,46 @@ fn on_an_unshaded_terminal_the_focused_marks_are_bold_and_nothing_is_shaded() {
     );
     let label = column_of(&buf, focused, "Allow once");
     assert_eq!(buf[(label, focused)].bg, Color::Reset);
+
+fn footer(view: &ListSelectionView) -> String {
+    let buf = render(view, 100);
+    line(&buf, buf.area.height - 1)
+}
+
+#[test]
+fn list_footers_use_the_same_key_words_as_pickers() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let searchable = ListSelectionView::new(
+        SelectionViewParams {
+            title: Some("Pick a synthetic profile".to_string()),
+            items: vec![SelectionItem {
+                name: "Alpha".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            }],
+            is_searchable: true,
+            ..Default::default()
+        },
+        AppEventSender::new(tx.clone()),
+    );
+    let plain = ListSelectionView::new(
+        SelectionViewParams {
+            title: Some("Pick a synthetic profile".to_string()),
+            footer_hint: Some(crate::bottom_pane::popup_consts::standard_popup_hint_line()),
+            items: vec![SelectionItem {
+                name: "Alpha".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        AppEventSender::new(tx),
+    );
+
+    let searchable = footer(&searchable);
+    assert!(searchable.contains("↑↓/j/k move"), "{searchable}");
+    assert!(searchable.contains("/ search"), "{searchable}");
+    let plain = footer(&plain);
+    assert!(plain.contains("↑↓/j/k move"), "{plain}");
+    assert!(!plain.contains("search"), "{plain}");
 }

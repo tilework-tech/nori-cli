@@ -7,6 +7,7 @@ use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuItemTone;
 use nori_tui_components::MenuPlacement;
 use nori_tui_components::MenuRowPattern;
+use nori_tui_components::PickerAction;
 use nori_tui_components::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
@@ -455,7 +456,7 @@ impl ListSelectionView {
         }
         if self.search_active {
             Some(Line::from(vec![
-                "type to filter, ↑/↓ navigate, ".into(),
+                "type to filter, ↑↓ move, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
                 key_hint::plain(KeyCode::Esc).into(),
@@ -463,7 +464,7 @@ impl ListSelectionView {
             ]))
         } else {
             Some(Line::from(vec![
-                "↑/k ↓/j navigate, ".into(),
+                "↑↓/j/k move, ".into(),
                 "/ search, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
@@ -503,20 +504,6 @@ impl BottomPaneView for ListSelectionView {
         }
         match key_event {
             KeyEvent {
-                code: KeyCode::Up, ..
-            } => self.move_up(),
-            KeyEvent {
-                code: KeyCode::Down,
-                ..
-            } => self.move_down(),
-            KeyEvent {
-                code: KeyCode::Backspace,
-                ..
-            } if self.is_searchable && self.search_active => {
-                self.search_query.pop();
-                self.apply_filter();
-            }
-            KeyEvent {
                 code: KeyCode::Esc, ..
             } if self.search_active => {
                 self.search_active = false;
@@ -542,82 +529,57 @@ impl BottomPaneView for ListSelectionView {
                 }
             }
             KeyEvent {
-                code: KeyCode::Char(c),
-                modifiers,
-                ..
-            } if self.is_searchable
-                && self.search_active
-                && !modifiers.contains(KeyModifiers::CONTROL)
-                && !modifiers.contains(KeyModifiers::ALT) =>
-            {
-                self.search_query.push(c);
-                self.apply_filter();
-            }
-            KeyEvent {
-                code: KeyCode::Char('f'),
-                modifiers,
-                ..
-            } if self.is_searchable
-                && !self.search_active
-                && modifiers == KeyModifiers::CONTROL =>
-            {
-                self.search_active = true;
-            }
-            KeyEvent {
-                code: KeyCode::Char(c),
-                modifiers,
-                ..
-            } if self.is_searchable
-                && !self.search_active
-                && !modifiers.contains(KeyModifiers::CONTROL)
-                && !modifiers.contains(KeyModifiers::ALT) =>
-            {
-                match c {
-                    'f' | '/' => self.search_active = true,
-                    'k' => self.move_up(),
-                    'j' => self.move_down(),
-                    _ => {
-                        if let Some(idx) = c
-                            .to_digit(10)
-                            .map(|d| d as usize)
-                            .and_then(|n| self.nth_selectable_visible_idx(n))
-                        {
-                            self.state.selected_idx = Some(idx);
-                            self.accept();
-                        }
-                    }
-                }
-            }
-            // Non-searchable lists keep their direct navigation and selection shortcuts.
-            KeyEvent {
-                code: KeyCode::Char(c),
-                modifiers,
-                ..
-            } if !self.is_searchable
-                && !modifiers.contains(KeyModifiers::CONTROL)
-                && !modifiers.contains(KeyModifiers::ALT) =>
-            {
-                match c {
-                    'k' => self.move_up(),
-                    'j' => self.move_down(),
-                    _ => {
-                        if let Some(idx) = c
-                            .to_digit(10)
-                            .map(|d| d as usize)
-                            .and_then(|n| self.nth_selectable_visible_idx(n))
-                        {
-                            self.state.selected_idx = Some(idx);
-                            self.accept();
-                        }
-                    }
-                }
-            }
-            KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => self.accept(),
-            _ => {}
+            KeyEvent {
+                code: KeyCode::Char(c @ '1'..='9'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !self.search_active => {
+                if let Some(idx) = c
+                    .to_digit(10)
+                    .map(|d| d as usize)
+                    .and_then(|n| self.nth_selectable_visible_idx(n))
+                {
+                    self.state.selected_idx = Some(idx);
+                    self.accept();
+                }
+            }
+            key_event => {
+                let search_active = self.is_searchable && self.search_active;
+                match super::picker_keys::navigation_action(&key_event, search_active) {
+                    Some(PickerAction::MoveUp) => self.move_up(),
+                    Some(PickerAction::MoveDown) => self.move_down(),
+                    Some(PickerAction::ActivateSearch) if self.is_searchable => {
+                        self.search_active = true;
+                    }
+                    Some(PickerAction::Backspace) => {
+                        self.search_query.pop();
+                        self.apply_filter();
+                    }
+                    Some(PickerAction::AppendQuery(c)) => {
+                        self.search_query.push(c);
+                        self.apply_filter();
+                    }
+                    Some(
+                        PickerAction::ActivateSearch
+                        | PickerAction::DeactivateSearch
+                        | PickerAction::PageUp
+                        | PickerAction::PageDown
+                        | PickerAction::First
+                        | PickerAction::Last
+                        | PickerAction::Submit
+                        | PickerAction::Toggle
+                        | PickerAction::Cancel
+                        | PickerAction::NextCategory
+                        | PickerAction::PreviousCategory
+                        | PickerAction::ClearQuery,
+                    )
+                    | None => {}
+                }
+            }
         }
     }
 

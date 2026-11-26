@@ -1289,6 +1289,15 @@ mod tests {
         assert!(model_render.contains("Other"), "{model_render}");
         assert_selected_row_has_symmetric_rails(&model_render, "Stable");
         assert_snapshot!("shared_model_picker", model_render);
+
+        assert!(model_render.contains("/ search"), "{model_render}");
+        pane.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        for character in "prev".chars() {
+            pane.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        let filtered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        assert!(filtered.contains("Preview"), "{filtered}");
+        assert!(!filtered.contains("Stable"), "{filtered}");
     }
 
     #[test]

@@ -190,7 +190,7 @@ pub(crate) fn acp_session_config_value_picker_params(
                 .unwrap_or_else(|| "Select a value for this ACP session setting".to_string()),
         ),
         footer_hint: Some(standard_popup_hint_line()),
-        is_searchable: count_select_values(&select.options) >= 6,
+        is_searchable: is_model || count_select_values(&select.options) >= 6,
         search_placeholder: Some("Filter values".to_string()),
         items,
         initial_selected_idx,

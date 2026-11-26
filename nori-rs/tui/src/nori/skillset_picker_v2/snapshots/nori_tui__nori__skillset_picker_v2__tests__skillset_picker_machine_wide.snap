@@ -9,4 +9,4 @@ expression: "render(params, 80)"
   ▏› 1. No Skillset  Start without a skillset                                ▕
      2. rust-dev     v0.3.0
 
-  ↑/k ↓/j navigate, / search, enter confirm, esc go back
+  ↑↓/j/k move, / search, enter confirm, esc go back

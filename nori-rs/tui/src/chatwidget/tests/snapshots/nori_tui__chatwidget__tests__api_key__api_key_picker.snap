@@ -12,4 +12,4 @@ expression: render_bottom_pane(&chat)
                                                at launch; usage is billed to
                                                that API account
 
-  ↑/k ↓/j to navigate, enter to confirm, esc to go back
+  ↑↓/j/k move, enter confirm, esc go back
