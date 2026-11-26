@@ -43,9 +43,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
 
     // Wait for some response - we should see either an error message or
     // at minimum the prompt should become active again
-    std::thread::sleep(Duration::from_secs(3));
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Debug: Print what we see
     eprintln!("=== Screen contents after prompt failure ===");

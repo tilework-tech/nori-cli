@@ -1,10 +1,8 @@
 use insta::assert_snapshot;
-use std::time::Duration;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -34,10 +32,9 @@ fn test_ctrl_c_clears_input() {
         .wait_for(|s| !s.contains("draft message"), TIMEOUT)
         .expect("Input was not cleared");
 
-    // std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     // assert_snapshot!(
     //     "ctrl_c_clears",
-    //     normalize_for_input_snapshot(session.screen_contents())
+    //     normalize_for_input_snapshot(session.settled_screen())
     // );
 }
 
@@ -60,10 +57,9 @@ fn test_backspace() {
     session.wait_for_text("Hel", TIMEOUT).unwrap();
     session.wait_for(|s| !s.contains("Hello"), TIMEOUT).unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "typing_and_backspace",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }
 
@@ -77,16 +73,27 @@ fn test_arrows() {
     session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
 
     session.submit_input("/model").unwrap();
-    std::thread::sleep(Duration::from_millis(100));
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(Duration::from_millis(100));
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(Duration::from_millis(100));
+    session
+        .wait_for_text("Select a value for this ACP session setting", TIMEOUT)
+        .unwrap();
+    session
+        .press(
+            Key::Down,
+            |screen| screen.contains("▏› 2. Mock Fast Model"),
+            "the second model is selected",
+        )
+        .unwrap();
+    session
+        .press(
+            Key::Down,
+            |screen| screen.contains("▏› 3. Use custom model"),
+            "the custom model row is selected",
+        )
+        .unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "model_changed",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }
 
@@ -144,10 +151,9 @@ fn test_history_navigation_up_down() {
         .unwrap();
 
     // Snapshot the final state
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "history_navigation_up_down",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }
 
@@ -218,9 +224,8 @@ fn test_history_navigation_multiple_messages() {
         .unwrap();
 
     // Snapshot the final state
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "history_navigation_multiple_messages",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }

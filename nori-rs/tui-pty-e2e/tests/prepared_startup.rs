@@ -447,10 +447,9 @@ approval_mode = true
     session
         .wait_for_text("Approvals for this session", TIMEOUT)
         .expect("approval picker");
-    std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
         "active_session_approval_picker",
-        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
+        tui_pty_e2e::normalize_for_input_snapshot(session.settled_screen())
     );
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();

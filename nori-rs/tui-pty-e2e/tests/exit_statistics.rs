@@ -3,7 +3,6 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -28,9 +27,7 @@ fn assert_exit_card(session: &mut TuiSession) {
     session
         .wait_for_text("nori resume", TIMEOUT)
         .expect("resume command did not appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     let last = screen
         .lines()
         .map(str::trim_end)
@@ -65,13 +62,12 @@ fn test_exit_message_displays_on_ctrl_d() {
     session
         .wait_for_text("Sure, I'll help you with that!", TIMEOUT)
         .expect("Response did not appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    session.settled_screen();
 
     // Quit the session with Ctrl+D (press twice - first clears quit hint, second triggers exit)
     session.send_key(Key::Ctrl('d')).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Ctrl('d')).unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     assert_exit_card(&mut session);
 
@@ -105,11 +101,10 @@ fn test_exit_message_displays_on_slash_exit() {
     session
         .wait_for_text("Sure, I'll help you with that!", TIMEOUT)
         .expect("Response did not appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    session.settled_screen();
 
     // Quit the session with /exit command
     session.submit_input("/exit").unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     assert_exit_card(&mut session);
 

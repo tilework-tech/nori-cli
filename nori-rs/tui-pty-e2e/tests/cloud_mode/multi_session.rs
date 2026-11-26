@@ -108,8 +108,7 @@ fn test_cloud_close_beside_another_session_lists_it_as_closed() {
     session
         .wait_for_text("Sessions 2", Duration::from_secs(3))
         .expect("the list opens");
-    std::thread::sleep(Duration::from_millis(300));
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     assert!(
         screen
             .lines()

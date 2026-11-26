@@ -263,7 +263,7 @@ fn delete_after_the_selected_message_starts_spares_its_identical_neighbour() {
     select_head_and_let_it_start(&mut session, &log);
 
     key(&mut session, Key::Char('x'));
-    std::thread::sleep(Duration::from_secs(1));
+    session.settle(Duration::from_secs(1));
     assert_eq!(
         queued_rows(&session.screen_contents()),
         ["dup", "tail"],
@@ -285,7 +285,7 @@ fn edit_after_the_selected_message_starts_spares_its_identical_neighbour() {
     select_head_and_let_it_start(&mut session, &log);
 
     key(&mut session, Key::Enter);
-    std::thread::sleep(Duration::from_secs(1));
+    session.settle(Duration::from_secs(1));
     let screen = session.screen_contents();
     assert_eq!(queued_rows(&screen), ["dup", "tail"], "{screen}");
 

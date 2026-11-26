@@ -10,7 +10,6 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -27,9 +26,7 @@ fn test_acp_mode_startup_with_mock_agent() {
         .wait_until_ready()
         .expect("ACP mode TUI should start successfully with mock agent");
 
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Verify we're in the TUI and not stuck at an error screen
     assert!(
@@ -278,9 +275,8 @@ fn test_acp_mode_startup_snapshot() {
 
     session.wait_until_ready().expect("ACP mode should start");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
         "acp_mode_startup",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }

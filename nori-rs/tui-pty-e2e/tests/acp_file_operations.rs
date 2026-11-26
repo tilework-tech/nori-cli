@@ -30,7 +30,6 @@
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -415,10 +414,8 @@ fn test_acp_file_write_snapshot() {
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("File write should complete");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     insta::assert_snapshot!(
         "acp_file_write_success",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }

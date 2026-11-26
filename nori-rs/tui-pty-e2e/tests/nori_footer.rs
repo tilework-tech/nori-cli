@@ -1,7 +1,6 @@
 use insta::assert_snapshot;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -20,8 +19,7 @@ fn test_footer_displays_git_branch() {
     session.wait_until_ready().unwrap();
     session.wait_for_text("⎇", TIMEOUT).unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // The footer should contain git branch info (master, since we use git init -b master).
     assert!(
@@ -61,8 +59,7 @@ approval_mode = true
     session.wait_until_ready().unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Without a git repo, the footer should NOT contain the branch symbol
     assert!(
@@ -129,8 +126,7 @@ git_stats = true
         .wait_for_text("Mock Default Model", TIMEOUT)
         .unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Verify git branch is displayed (always master since we use git init -b master)
     assert!(
@@ -196,13 +192,20 @@ approval_mode = true
     session.wait_until_ready().unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
     // Startup activates the session, so the model announcement lands
-    // asynchronously; wait for it so the snapshot is deterministic.
+    // asynchronously. At this width it wraps after "Thought", so wait for the
+    // whole notice rather than the model name its first line already shows.
     session
-        .wait_for_text("Mock Default Model", TIMEOUT)
+        .wait_for(
+            |screen| {
+                screen.split_whitespace().collect::<String>().contains(
+                    "MockACPoptions:Model=MockDefaultModel,ThoughtLevel=Medium(/configtochange)",
+                )
+            },
+            TIMEOUT,
+        )
         .unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     let lines: Vec<&str> = contents.lines().collect();
     let branch_line_idx = lines
@@ -254,8 +257,7 @@ approval_mode = false
     // is the readiness signal rather than a post-activation session header.
     session.wait_until_ready().unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Git branch should NOT be displayed (disabled in config)
     assert!(
@@ -309,8 +311,7 @@ fn test_default_idle_footer_has_no_metadata_clutter() {
         .wait_for_text("Mock Default Model", TIMEOUT)
         .unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     for clutter in [
         "Approvals:",
@@ -370,8 +371,7 @@ exit 1
 
     session.wait_until_ready().unwrap();
     session.wait_for_text("Skillsets v", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    session.screen_contents()
+    session.settled_screen()
 }
 
 #[test]

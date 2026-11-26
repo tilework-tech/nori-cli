@@ -3,7 +3,6 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -51,7 +50,6 @@ fn test_escape_cancels_streaming() {
 
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Escape).unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)
@@ -92,7 +90,6 @@ fn test_ctrl_c_cancels_streaming() {
 
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Ctrl('c')).unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)

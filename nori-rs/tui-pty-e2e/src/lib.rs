@@ -12,6 +12,9 @@
 //! - [`TuiSession::press`] for a key that more input follows. Never write
 //!   Escape and then more input without waiting for the Escape's effect:
 //!   crossterm reads the pair as an Alt chord when it arrives in one read.
+//! - [`TuiSession::settled_screen`] for the screen a snapshot or assertion
+//!   reads. A `std::thread::sleep` reads nothing from the PTY, so the screen
+//!   after it is stale (see the `settling` module).
 
 use anyhow::Result;
 use owo_colors::OwoColorize;
@@ -113,6 +116,7 @@ pub use keys::Key;
 mod input;
 mod keys;
 mod readiness;
+mod settling;
 pub use readiness::has_composer_row;
 mod terminal_queries;
 
@@ -135,6 +139,7 @@ pub struct TuiSession {
 pub use emulator::Emulator;
 pub use emulator::SCROLLBACK_ROWS;
 mod emulator;
+mod synchronized_update;
 
 impl Drop for TuiSession {
     fn drop(&mut self) {
@@ -524,6 +529,7 @@ trust_level = "trusted"
         // The PTY reader is in non-blocking mode and will return immediately if no data is available
         // We rely on the polling loop in wait_for() to handle timing
         let read_result = self.reader.read(&mut buf);
+        self.emulator.release_stale_frame();
         let read_duration = read_start.elapsed();
 
         if debug {
@@ -1028,7 +1034,6 @@ fn binary_path(name: &str) -> String {
 
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
-pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
 /// Pause after writing Escape so it is read apart from the next write; see
 /// [`TuiSession::send_key`].
 pub const ESCAPE_GAP: Duration = Duration::from_millis(100);

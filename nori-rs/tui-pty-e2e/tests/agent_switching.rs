@@ -14,7 +14,6 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::has_composer_row;
 
@@ -358,10 +357,8 @@ fn test_agent_command_shows_available_agents() {
             Duration::from_secs(8),
         )
         .expect("Agent picker should appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     // Verify both mock agents are visible
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     assert!(
         screen.contains("mock-model") || screen.contains("Mock"),
         "Agent picker should show mock-model agent, got: {}",
@@ -426,12 +423,18 @@ fn test_agent_switch_activates_prepared_candidate() {
         "the current agent must remain alive until candidate activation"
     );
 
-    // Row 0 explicitly starts a new session on the prepared connection.
+    // Row 0 explicitly starts a new session on the prepared connection. The
+    // picker closes before activation finishes, so wait for the new session's
+    // notice rather than the composer alone.
     session
         .press(
             Key::Enter,
-            |screen| !screen.contains("Start a new session") && has_composer_row(screen),
-            "candidate activation should return to the composer",
+            |screen| {
+                !screen.contains("Start a new session")
+                    && has_composer_row(screen)
+                    && screen.contains("Started new conversation with agent: Mock ACP Alt")
+            },
+            "candidate activation should start the new session",
         )
         .unwrap();
     assert_ne!(
@@ -685,11 +688,9 @@ fn test_model_command_shows_disabled_in_acp_mode() {
             Duration::from_secs(8),
         )
         .expect("Model picker should appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     // In ACP mode, model options should show as disabled or indicate
     // they're not available
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     assert!(
         screen.contains("disabled")
             || screen.contains("Not available")
@@ -873,9 +874,7 @@ fn test_slash_popup_shows_current_agent_in_description() {
     session
         .wait_for(|screen| screen.contains("/agent"), Duration::from_secs(5))
         .expect("Slash popup should show /agent command");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
 
     // The description for /agent should include the current agent name
     // in parentheses. mock-model has display name "Mock ACP".
@@ -918,9 +917,7 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
             Duration::from_secs(5),
         )
         .expect("Slash popup should show /approvals command");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
 
     // A trusted folder's session starts in Agent.
     assert!(

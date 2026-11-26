@@ -4,7 +4,6 @@ use std::time::Instant;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 use tui_pty_e2e::has_composer_row;
@@ -25,15 +24,17 @@ fn has_prompt_ready_marker(contents: &str) -> bool {
 
 #[cfg(target_os = "linux")]
 fn activate_new_session(session: &mut TuiSession) {
+    // Startup activates a session on its own; a /new submitted before that
+    // session has started is dropped, so wait for it first.
     session
-        .wait_for_composer()
-        .expect("Sessionless composer did not appear");
+        .wait_until_ready()
+        .expect("Startup session did not start");
     session.submit_input("/new").expect("Failed to enter /new");
-    // Startup already wrote a card, so "Nori CLI" is no longer a readiness
-    // signal. Wait for the row only an activated session's card carries: the
-    // model the agent resolved.
+    // Startup already wrote a card and announced its session's model, so
+    // neither "Nori CLI" nor the model name alone shows that /new finished.
+    // Only the card /new writes carries the model on its agent row.
     session
-        .wait_for_text("Mock Default Model", TIMEOUT)
+        .wait_for_text("Agent        Mock ACP · Mock Default Model", TIMEOUT)
         .expect("Activated session header did not appear");
 }
 
@@ -53,8 +54,7 @@ fn test_startup_error_for_unregistered_model() {
     // subtitle. History may be outside the viewport while the picker is open.
     session.wait_for_text("Select agent", TIMEOUT).unwrap();
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     let mut lines = contents.lines();
     lines
@@ -86,9 +86,7 @@ fn test_startup_shows_welcome() {
     session
         .wait_for_text("Welcome to Nori", TIMEOUT)
         .expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
     assert!(contents.contains("Welcome to Nori, your AI coding assistant"));
     assert_snapshot!(
         "startup_shows_welcome",
@@ -104,10 +102,8 @@ fn test_startup_with_dimensions() {
 
     // Wait for prompt - in a 10-row terminal, the header may scroll off.
     session.wait_until_ready().expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     // Verify terminal size is respected
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
     assert!(contents.lines().count() <= 10);
 }
 
@@ -118,9 +114,7 @@ fn test_runs_in_temp_directory_by_default() {
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
     activate_new_session(&mut session);
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Should run in /tmp/, not home directory
     assert!(
@@ -144,9 +138,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Wait for the prompt to appear (indicated by the chevron character)
     session.wait_until_ready().expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Should NOT show the trust directory approval screen
     assert!(
@@ -182,7 +174,7 @@ fn test_startup_shows_nori_banner() {
         .wait_for_text("npx nori-skillsets init", TIMEOUT)
         .expect("Install instructions did not appear - nori-skillsets might be in PATH");
 
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Verify Nori branding elements are present
     assert!(
@@ -209,12 +201,11 @@ fn test_startup_shows_nori_banner() {
         normalize_for_snapshot(header_lines.join("\n"))
     );
 
-    // The card is written before a session exists, so the agent's own
-    // configuration arrives after it, on its own line.
+    // /new writes its card once the session exists, so the agent row reports
+    // the model the session resolved.
     assert!(
-        contents.contains("Mock ACP options: Model=Mock Default Model"),
-        "The activated session should report the model it resolved, but got: {}",
-        contents
+        contents.contains("Agent        Mock ACP · Mock Default Model"),
+        "The activated session should report the model it resolved, but got: {contents}"
     );
 }
 
@@ -243,7 +234,7 @@ fn test_startup_hides_install_hint_when_nori_installed() {
 
     activate_new_session(&mut session);
 
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Verify Nori branding is present
     assert!(
@@ -314,14 +305,18 @@ fn test_trust_directory_saves_to_config() {
         )
         .expect("Main prompt did not appear after trust selection");
 
-    // Give a moment for config to be written
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    // Step 6: Verify config.toml was created with trust entry
+    // Step 6: Wait for config.toml to record both choices, then verify them
     let nori_home = session
         .nori_home_path()
         .expect("No NORI_HOME temp directory");
     let config_path = nori_home.join("config.toml");
+    let deadline = Instant::now() + TIMEOUT;
+    while Instant::now() < deadline
+        && !std::fs::read_to_string(&config_path)
+            .is_ok_and(|config| config.contains("trust_level") && config.contains("tool_output"))
+    {
+        std::thread::sleep(Duration::from_millis(50));
+    }
 
     assert!(
         config_path.exists(),
@@ -353,18 +348,8 @@ fn test_poll_does_not_block_when_no_data() {
     // Wait for initial startup to complete
     session.wait_until_ready().expect("Initial startup failed");
 
-    // Wait for screen to stabilize - keep polling until contents don't change
-    let mut prev_contents = String::new();
-    for _ in 0..20 {
-        session.poll().expect("Poll failed during stabilization");
-        std::thread::sleep(Duration::from_millis(100));
-        let contents = session.screen_contents();
-        if contents == prev_contents {
-            // No change for 100ms, screen is stable
-            break;
-        }
-        prev_contents = contents;
-    }
+    // Wait for the screen to stop changing.
+    session.settled_screen();
 
     // Now nori is truly waiting for input, no more data will come
     // Poll should return immediately without blocking

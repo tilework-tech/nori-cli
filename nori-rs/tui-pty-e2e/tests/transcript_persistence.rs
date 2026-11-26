@@ -562,10 +562,8 @@ fn test_resume_viewonly_shows_transcript() {
     );
 
     // Take snapshot for visual verification
-    std::thread::sleep(Duration::from_millis(500));
-
     insta::assert_snapshot!(
         "transcript_viewonly_display",
-        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
+        tui_pty_e2e::normalize_for_input_snapshot(session.settled_screen())
     );
 }
