@@ -130,3 +130,72 @@ fn a_reattached_terminal_takes_one_prompt_back_and_resumes_the_other_once() {
         "the taken prompt is never sent and the other is sent once"
     );
 }
+
+#[test]
+fn a_terminal_that_takes_control_edits_another_terminals_queued_prompt() {
+    let logs = tempfile::tempdir().unwrap();
+    let log = logs.path().join("prompts.jsonl");
+    let host = JoinedHost::new(&[
+        ("MOCK_AGENT_PROMPT_LOG", log.to_str().unwrap()),
+        ("MOCK_AGENT_DELAY_MS", "300"),
+    ]);
+    host.start();
+
+    let mut first = host.attach_new();
+    let terminal = &mut first.terminal;
+    terminal.submit_input("mock:stream-until-cancel").unwrap();
+    terminal.wait_for_text("esc to interrupt", TIMEOUT).unwrap();
+    terminal.type_input("plant the cedar row").unwrap();
+    terminal.send_key(Key::Tab).unwrap();
+    terminal
+        .wait_for_text("  ↳ plant the cedar row", TIMEOUT)
+        .unwrap();
+    terminal.send_key(Key::Escape).unwrap();
+    terminal
+        .wait_for_text("1 queued · paused (interrupted)", TIMEOUT)
+        .expect("the interrupted turn holds the queue");
+
+    let mut second = host.attach_first();
+    let other = &mut second.terminal;
+    other
+        .wait_for_text("1 queued · paused (interrupted)", TIMEOUT)
+        .expect("the other terminal sees the held queue");
+    other.send_key(Key::Alt('t')).unwrap();
+    other
+        .wait_for_text("controlling", TIMEOUT)
+        .expect("the other terminal takes control");
+    other.send_key(Key::Up).unwrap();
+    other.wait_for_text("j/k select", TIMEOUT).unwrap();
+    other.send_key(Key::Enter).unwrap();
+    other
+        .wait_for(
+            |screen| screen.contains("› plant the cedar row") && !screen.contains("queued"),
+            TIMEOUT,
+        )
+        .expect("the controlling terminal holds the prompt to edit");
+    first
+        .terminal
+        .wait_for(|screen| !screen.contains("queued"), TIMEOUT)
+        .expect("the queue is empty in the terminal that typed it too");
+
+    let other = &mut second.terminal;
+    other.type_input(" by the fence").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    other.send_key(Key::Enter).unwrap();
+    let prompts = wait_delivered(&log, 2);
+    other
+        .wait_for(
+            |screen| screen.contains("· ready ·") && !screen.contains("queued"),
+            TIMEOUT,
+        )
+        .expect("the session settles");
+    assert_eq!(
+        prompts,
+        [
+            "mock:stream-until-cancel",
+            "plant the cedar row by the fence"
+        ],
+        "only the corrected prompt reaches the agent"
+    );
+    assert_eq!(delivered(&log), prompts);
+}
