@@ -106,13 +106,30 @@ impl HostFiles {
         serde_json::from_reader(file).ok()
     }
 
+    /// A new bearer token for this host, in `token`. Every client needs it,
+    /// and a remote client is given a copy.
     pub fn new_token(&self) -> anyhow::Result<String> {
+        self.new_secret("token")
+    }
+
+    /// A new local token for this host, in `local-token`. It never leaves
+    /// this machine: a client that presents it runs here.
+    pub fn new_local_token(&self) -> anyhow::Result<String> {
+        self.new_secret("local-token")
+    }
+
+    /// The running host's local token, if it has one.
+    pub fn read_local_token(&self) -> Option<String> {
+        read_token(&self.directory.join("local-token")).ok()
+    }
+
+    fn new_secret(&self, name: &str) -> anyhow::Result<String> {
         let token = format!(
             "{}{}",
             uuid::Uuid::new_v4().simple(),
             uuid::Uuid::new_v4().simple()
         );
-        let mut file = private_open(&self.directory.join("token"), true)?;
+        let mut file = private_open(&self.directory.join(name), true)?;
         file.set_len(0)?;
         file.write_all(token.as_bytes())?;
         file.sync_all()?;

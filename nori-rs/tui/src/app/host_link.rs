@@ -255,13 +255,7 @@ impl HostLink {
                 tag: HostTag::Operation(feedback),
                 result,
             } => {
-                feedback.deliver(result.map_err(|error| {
-                    anyhow::anyhow!(
-                        error
-                            .message
-                            .unwrap_or_else(|| "Host request failed.".into())
-                    )
-                }));
+                feedback.deliver(result.map_err(anyhow::Error::new));
                 Ok(None)
             }
             HostEvent::Reply {

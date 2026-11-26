@@ -69,6 +69,7 @@ async fn join(endpoint: String) -> HostLink {
         HostEndpoint {
             endpoint,
             token: TOKEN.into(),
+            local_token: None,
             refresh_local_token: None,
         },
         initial,
@@ -259,6 +260,7 @@ async fn a_host_that_stops_leaves_the_joined_terminal_running_with_the_reason() 
         HostEndpoint {
             endpoint: endpoint_of(replacement.local_addr()),
             token: TOKEN.into(),
+            local_token: None,
             refresh_local_token: None,
         },
         initial,
