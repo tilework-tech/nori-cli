@@ -442,7 +442,10 @@ fn test_agent_switch_activates_prepared_candidate() {
     // Row 0 explicitly starts a new session on the prepared connection.
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("›", Duration::from_secs(10))
+        .wait_for(
+            |screen| !screen.contains("Start a new session") && screen.contains("›"),
+            Duration::from_secs(10),
+        )
         .expect("candidate activation should return to the composer");
     assert_ne!(
         initial_pid, new_pid,
@@ -844,9 +847,9 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         }
         // Only the first nine rows have digit shortcuts.
         let selected = if index < 9 {
-            format!("▏{}. {provider}", index + 1)
+            format!("▏› {}. {provider}", index + 1)
         } else {
-            format!("▏  {provider}")
+            format!("▏›    {provider}")
         };
         session
             .wait_for_text(&selected, TIMEOUT)
@@ -854,10 +857,10 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
     }
 
     session.send_str("\x1b[H").unwrap(); // Home
-    session.wait_for_text("▏1. Mock ACP", TIMEOUT).unwrap();
+    session.wait_for_text("▏› 1. Mock ACP", TIMEOUT).unwrap();
     session.send_str("\x1b[F").unwrap(); // End
     session
-        .wait_for_text("▏  Pi", TIMEOUT)
+        .wait_for_text("▏›    Pi", TIMEOUT)
         .expect("Scrolling to the end should reveal Pi");
 }
 

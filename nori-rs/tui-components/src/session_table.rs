@@ -17,9 +17,10 @@ pub const MIN_SESSION_CELLS: i32 = 24;
 pub const AGENT_CELLS: i32 = 12;
 pub const STATUS_CELLS: i32 = 14;
 pub const CONTEXT_CELLS: i32 = 11;
-/// Narrowest terminal that still shows the Agent column.
+/// Narrowest row that still shows the Agent column. In a picker, the
+/// focus rails make the terminal two cells wider than the row.
 pub const AGENT_FROM: i32 = 58;
-/// Narrowest terminal that shows the Context column.
+/// Narrowest row that shows the Context column.
 pub const CONTEXT_FROM: i32 = 87;
 const GAP: i32 = 2;
 

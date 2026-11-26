@@ -362,8 +362,7 @@ impl Renderable for ComponentPickerView {
             .theme(crate::style::component_theme())
             .density(self.density)
             .show_title(self.show_title)
-            .show_details(self.show_details)
-            .fullscreen_selection_rails(true);
+            .show_details(self.show_details);
         if let Some(footer_hints) = &self.footer_hints {
             picker = picker.footer_hints(footer_hints.clone());
         }

@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/mod.rs
+assertion_line: 1189
 expression: filtered
 ---
                                                                                                     
@@ -7,8 +8,8 @@ expression: filtered
   Toggle TUI settings (changes saved to config.toml)                                                
   ⌕  resize reflow                                                                                  
                                                                                                     
-  ▏1. Resize Reflow (on) (current)                                                               ▕  
-  ▏   Reflow transcript history when the terminal width changes                                  ▕  
+  ▏› 1. Resize Reflow (on) (current)                                                             ▕  
+  ▏     Reflow transcript history when the terminal width changes                                ▕  
                                                                                                     
                                                                                                     
                                                                                                     

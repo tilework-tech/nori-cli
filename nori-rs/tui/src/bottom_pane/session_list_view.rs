@@ -598,7 +598,7 @@ mod tests {
             .lines()
             .find_map(|line| {
                 let line = line.trim_start_matches('"');
-                line.strip_prefix("› ").map(|rest| {
+                line.strip_prefix("▏› ").map(|rest| {
                     rest.split("  ")
                         .next()
                         .unwrap_or_default()

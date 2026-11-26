@@ -1,21 +1,22 @@
 ---
 source: tui/src/bottom_pane/mod.rs
+assertion_line: 1285
 expression: model_render
 ---
                                                                                                     
   Model                                                                                             
   Select a value for this ACP session setting                                                       
                                                                                                     
-     Recommended                                                                                    
+        Recommended                                                                                 
                                                                                                     
-  ▏1. Stable (current)                                                                           ▕  
+  ▏› 1. Stable (current)                                                                         ▕  
   ▏                                                                                              ▕  
-   2. Preview                                                                                       
+     2. Preview                                                                                     
                                                                                                     
-     Other                                                                                          
+        Other                                                                                       
                                                                                                     
-   3. Experimental                                                                                  
-      experimental                                                                                  
-   4. Use custom model...                                                                           
-      Enter any model ID                                                                            
+     3. Experimental                                                                                
+        experimental                                                                                
+     4. Use custom model...                                                                         
+        Enter any model ID                                                                          
   ↑↓/j/k move  enter select  esc close

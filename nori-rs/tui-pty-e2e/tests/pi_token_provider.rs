@@ -47,7 +47,7 @@ fn picking_pi_prepares_its_native_server_and_completes_a_turn() {
     session.submit_input("/agent").unwrap();
     session.wait_for_text("Select agent", TIMEOUT).unwrap();
     session.send_str("\x1b[F").unwrap();
-    session.wait_for_text("▏  Pi", TIMEOUT).unwrap();
+    session.wait_for_text("▏›    Pi", TIMEOUT).unwrap();
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Start a new session", TIMEOUT)

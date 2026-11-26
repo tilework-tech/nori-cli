@@ -1,14 +1,15 @@
 ---
 source: tui/src/nori/loop_count_picker.rs
+assertion_line: 665
 expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
   Loop count
   Select number of loop iterations
 
-   1. Disabled
-   2. 2
-   3. 3
-  ▏4. 5 (current)                                        ▕
-   5. 10
-   6. Custom...
+     1. Disabled
+     2. 2
+     3. 3
+  ▏› 4. 5 (current)                                      ▕
+     5. 10
+     6. Custom...
   ↑↓/j/k move  enter choose  esc close

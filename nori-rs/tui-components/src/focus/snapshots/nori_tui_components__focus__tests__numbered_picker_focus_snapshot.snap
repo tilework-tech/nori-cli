@@ -1,0 +1,17 @@
+---
+source: tui-components/src/focus/tests.rs
+assertion_line: 267
+expression: "snapshot_picker(&model_picker(), 40, 12)"
+---
+"                                        "
+"  Pick a model                          "
+"                                        "
+"  ▏› 1. Quick draft                  ▕  "
+"  ▏     Short replies                ▕  "
+"     2. Careful review                  "
+"        Longer reasoning                "
+"     3. Plain text                      "
+"        No formatting                   "
+"                                        "
+"  ↑↓/j/k move  / search  enter select   "
+"                                        "

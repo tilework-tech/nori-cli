@@ -1,14 +1,15 @@
 ---
 source: tui/src/bottom_pane/session_list_view.rs
+assertion_line: 569
 expression: screen
 ---
 "Sessions 2 · 1 waiting on you · 1 ready  tab: all sessions · / search           "
 "                                                                                "
 "All  waiting on you                                                             "
 "                                                                                "
-"  Session                                           Agent         Status        "
-"› ● waiting session (current)                       Mock ACP      waiting on you"
-"    no reply yet                                                                "
+"   Session                                         Agent         Status         "
+"▏› ● waiting session (current)                     Mock ACP      waiting on you▕"
+"▏    no reply yet                                                              ▕"
 "                                                                                "
 "↑↓/j/k move  enter open  ctrl+d close  tab all sessions  esc close              "
 "                                                                                "

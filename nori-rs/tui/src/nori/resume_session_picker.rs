@@ -524,8 +524,7 @@ mod tests {
                     Picker::new(&params.state)
                         .density(params.density)
                         .show_title(params.show_title)
-                        .show_details(params.show_details)
-                        .fullscreen_selection_rails(true),
+                        .show_details(params.show_details),
                     frame.area(),
                 )
             })

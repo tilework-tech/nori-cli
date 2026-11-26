@@ -83,7 +83,7 @@ fn snapshot_with_density(
     height: u16,
     density: PickerDensity,
 ) -> String {
-    snapshot_with_options(state, width, height, density, false)
+    snapshot_with_options(state, width, height, density, true)
 }
 
 fn snapshot_with_options(
@@ -91,7 +91,7 @@ fn snapshot_with_options(
     width: u16,
     height: u16,
     density: PickerDensity,
-    fullscreen_selection_rails: bool,
+    selection_rails: bool,
 ) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -100,7 +100,7 @@ fn snapshot_with_options(
             frame.render_widget(
                 Picker::new(state)
                     .density(density)
-                    .fullscreen_selection_rails(fullscreen_selection_rails),
+                    .selection_rails(selection_rails),
                 frame.area(),
             )
         })
@@ -156,13 +156,14 @@ fn simple_picker_uses_description_rows_without_table_headers_and_numbers_choices
     );
     assert_eq!(
         find_ascii_text_at_or_below(&buffer, "Mode (Agent)", 0),
-        Some((5, 4))
+        Some((8, 4))
     );
-    assert_eq!(buffer[(2, 4)].symbol(), "1");
-    assert_eq!(buffer[(3, 4)].symbol(), ".");
+    assert_eq!(buffer[(3, 4)].symbol(), "›");
+    assert_eq!(buffer[(5, 4)].symbol(), "1");
+    assert_eq!(buffer[(6, 4)].symbol(), ".");
     assert_eq!(
         find_ascii_text_at_or_below(&buffer, "Approval and sandboxing preset for the session", 0,),
-        Some((5, 5))
+        Some((8, 5))
     );
 }
 
@@ -189,17 +190,18 @@ fn picker_section_headings_are_bold_and_not_selectable() {
         let heading = find_ascii_text_at_or_below(&buffer, label, 3).expect("section heading");
         assert!(buffer[heading].modifier.contains(Modifier::BOLD));
         assert_ne!(buffer[heading].fg, Color::DarkGray);
-        assert_eq!(buffer[(2, heading.1)].symbol(), " ");
-        assert_eq!(buffer[(3, heading.1)].symbol(), " ");
+        assert_eq!(buffer[(5, heading.1)].symbol(), " ");
+        assert_eq!(buffer[(6, heading.1)].symbol(), " ");
     }
     let stable = find_ascii_text_at_or_below(&buffer, "Stable", 3).expect("stable choice");
-    assert_eq!(buffer[(2, stable.1)].symbol(), "1");
+    assert_eq!(buffer[(5, stable.1)].symbol(), "1");
     let unavailable =
         find_ascii_text_at_or_below(&buffer, "Unavailable", 3).expect("disabled choice");
-    assert_eq!(buffer[(2, unavailable.1)].symbol(), " ");
-    assert_eq!(buffer[(3, unavailable.1)].symbol(), " ");
+    assert_eq!(buffer[(5, unavailable.1)].symbol(), " ");
+    assert_eq!(buffer[(6, unavailable.1)].symbol(), " ");
     let preview = find_ascii_text_at_or_below(&buffer, "Preview", 3).expect("preview choice");
-    assert_eq!(buffer[(2, preview.1)].symbol(), "2");
+    assert_eq!(buffer[(3, preview.1)].symbol(), "›");
+    assert_eq!(buffer[(5, preview.1)].symbol(), "2");
 }
 
 #[test]
@@ -246,7 +248,7 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
         .expect("selected primary copy");
     let description = find_ascii_text_at_or_below(buffer, "Create a fresh ACP session", 4)
         .expect("selected supporting copy");
-    let pointer = (2, selected.1);
+    let pointer = (3, selected.1);
     for x in 2..56 {
         assert_eq!(buffer[(x, selected.1)].bg, Color::Rgb(43, 43, 43));
     }
@@ -372,8 +374,8 @@ fn selection_and_disabled_styles_override_provider_and_checked_tones() {
     let disabled_tone =
         find_ascii_text_at_or_below(&buffer, "Disabled tone", 2).expect("disabled type cell");
     assert_eq!(buffer[disabled_tone].fg, Color::DarkGray);
-    assert_eq!(buffer[(2, disabled_tone.1)].symbol(), "●");
-    assert_eq!(buffer[(2, disabled_tone.1)].fg, Color::DarkGray);
+    assert_eq!(buffer[(5, disabled_tone.1)].symbol(), "●");
+    assert_eq!(buffer[(5, disabled_tone.1)].fg, Color::DarkGray);
 }
 
 #[test]
@@ -418,7 +420,7 @@ fn multi_picker_selection_snapshot() {
 }
 
 #[test]
-fn fallback_theme_distinguishes_focused_and_unfocused_checked_rows() {
+fn focused_and_unfocused_checked_rows_share_the_dot() {
     let columns = [PickerColumn::flexible("title", "Action")];
     let items = [
         PickerItem::new("first", "title", "First action"),
@@ -438,65 +440,39 @@ fn fallback_theme_distinguishes_focused_and_unfocused_checked_rows() {
     let buffer = rendered_picker_buffer(&state, 48, 10);
     let first = find_ascii_text_at_or_below(&buffer, "First action", 2).expect("first row");
     let second = find_ascii_text_at_or_below(&buffer, "Second action", 2).expect("second row");
-    assert_eq!(buffer[(2, first.1)].symbol(), "●");
-    assert_eq!(buffer[(2, first.1)].fg, Color::Green);
-    assert_eq!(buffer[(2, second.1)].symbol(), "◉");
-    assert_eq!(buffer[(2, second.1)].fg, Color::Green);
+    assert_eq!(buffer[(3, first.1)].symbol(), " ");
+    assert_eq!(buffer[(5, first.1)].symbol(), "●");
+    assert_eq!(buffer[(5, first.1)].fg, Color::Green);
+    assert_eq!(buffer[(3, second.1)].symbol(), "›");
+    assert_eq!(buffer[(5, second.1)].symbol(), "●");
+    assert_eq!(buffer[(5, second.1)].fg, Color::Green);
 }
 
 #[test]
-fn picker_selection_rails_are_explicit_and_preserve_checked_state() {
+fn turning_rails_off_keeps_the_pointer_and_dots() {
     let columns = [PickerColumn::flexible("title", "Action")];
     let items = [
         PickerItem::new("first", "title", "First action").description("First description"),
         PickerItem::new("second", "title", "Second action").description("Second description"),
     ];
     let mut state = PickerState::new("Choose actions", columns, items).mode(PickerMode::Multi);
-    assert!(matches!(
-        state.handle(PickerAction::Toggle),
-        PickerOutcome::Toggled { selected: true, .. }
-    ));
+    state.handle(PickerAction::Toggle);
 
-    let default_buffer = rendered_picker_buffer(&state, 48, 10);
-    let default_first =
-        find_ascii_text_at_or_below(&default_buffer, "First action", 2).expect("default row");
-    let default_description =
-        find_ascii_text_at_or_below(&default_buffer, "First description", 2).expect("description");
-    assert_eq!(default_buffer[(2, default_first.1)].symbol(), "◉");
-    for y in default_first.1..=default_description.1 {
-        assert_eq!(find_symbols_on_row(&default_buffer, y, "▏"), Vec::new());
-        assert_eq!(find_symbols_on_row(&default_buffer, y, "▕"), Vec::new());
+    let backend = TestBackend::new(48, 10);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| frame.render_widget(Picker::new(&state).selection_rails(false), frame.area()))
+        .expect("draw picker");
+    let buffer = terminal.backend().buffer();
+    let first = find_ascii_text_at_or_below(buffer, "First action", 2).expect("first row");
+    let description =
+        find_ascii_text_at_or_below(buffer, "First description", 2).expect("description");
+    for y in first.1..=description.1 {
+        assert_eq!(find_symbols_on_row(buffer, y, "▏"), Vec::new());
+        assert_eq!(find_symbols_on_row(buffer, y, "▕"), Vec::new());
     }
-
-    let rails_buffer = rendered_picker_buffer_with_rails(&state, 48, 10);
-    let rails_first =
-        find_ascii_text_at_or_below(&rails_buffer, "First action", 2).expect("railed row");
-    let description = find_ascii_text_at_or_below(&rails_buffer, "First description", 2)
-        .expect("railed description");
-    for y in rails_first.1..=description.1 {
-        let left = find_symbol_on_row(&rails_buffer, y, "▏").expect("left rail");
-        let right = find_symbol_on_row(&rails_buffer, y, "▕").expect("right rail");
-        assert!(left.0 < rails_first.0);
-        assert!(right.0 > rails_first.0);
-        assert_eq!(rails_buffer[left].fg, Color::Green);
-        assert_eq!(rails_buffer[right].fg, Color::Green);
-    }
-    let selected_checked =
-        find_symbol_on_row(&rails_buffer, rails_first.1, "●").expect("selected checked marker");
-    assert!(selected_checked.0 < rails_first.0);
-    assert_eq!(find_symbol_on_row(&rails_buffer, rails_first.1, "◉"), None);
-    assert_eq!(find_symbol_on_row(&rails_buffer, rails_first.1, "›"), None);
-
-    state.handle(PickerAction::MoveDown);
-    let mixed_buffer = rendered_picker_buffer_with_rails(&state, 48, 10);
-    let first = find_ascii_text_at_or_below(&mixed_buffer, "First action", 2).expect("first row");
-    let second =
-        find_ascii_text_at_or_below(&mixed_buffer, "Second action", 2).expect("second row");
-    assert!(find_symbol_on_row(&mixed_buffer, first.1, "●").is_some());
-    assert!(find_symbols_on_row(&mixed_buffer, first.1, "▏").is_empty());
-    assert!(find_symbol_on_row(&mixed_buffer, second.1, "○").is_some());
-    assert!(find_symbol_on_row(&mixed_buffer, second.1, "▏").is_some());
-    assert!(find_symbol_on_row(&mixed_buffer, second.1, "▕").is_some());
+    assert_eq!(buffer[(2, first.1)].symbol(), "›");
+    assert_eq!(buffer[(4, first.1)].symbol(), "●");
 }
 
 #[test]
@@ -512,7 +488,7 @@ fn numbered_simple_picker_description_preserves_right_selection_rail() {
     )
     .search_mode(SearchMode::None);
 
-    let buffer = rendered_picker_buffer_with_rails(&state, 24, 8);
+    let buffer = rendered_picker_buffer(&state, 24, 8);
     let title = find_ascii_text_at_or_below(&buffer, "First action", 2).expect("title row");
     let description_y = title.1 + 1;
 
@@ -572,24 +548,6 @@ fn rendered_picker_buffer<K: Clone + Eq>(
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
         .draw(|frame| frame.render_widget(Picker::new(state), frame.area()))
-        .expect("draw picker");
-    terminal.backend().buffer().clone()
-}
-
-fn rendered_picker_buffer_with_rails<K: Clone + Eq>(
-    state: &PickerState<K>,
-    width: u16,
-    height: u16,
-) -> Buffer {
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    terminal
-        .draw(|frame| {
-            frame.render_widget(
-                Picker::new(state).fullscreen_selection_rails(true),
-                frame.area(),
-            )
-        })
         .expect("draw picker");
     terminal.backend().buffer().clone()
 }
@@ -706,13 +664,15 @@ fn cell_of(line: &str, needle: &str) -> Option<usize> {
 }
 
 /// Terminal width, then where Agent, Status and the context value start.
+/// The focus rails take a cell at each side, so a picker shows each column
+/// two cells later than `session_widths` alone would.
 const SESSION_LAYOUTS: [(u16, Option<usize>, usize, Option<usize>); 6] = [
-    (57, None, 43, None),
-    (58, Some(30), 44, None),
-    (80, Some(52), 66, None),
-    (86, Some(58), 72, None),
-    (87, Some(46), 60, Some(76)),
-    (120, Some(79), 93, Some(109)),
+    (59, None, 44, None),
+    (60, Some(31), 45, None),
+    (80, Some(51), 65, None),
+    (88, Some(59), 73, None),
+    (89, Some(47), 61, Some(77)),
+    (120, Some(78), 92, Some(108)),
 ];
 
 #[test]
@@ -726,7 +686,7 @@ fn two_row_session_columns_sit_at_the_layout_offsets() {
             .expect("header");
         assert_eq!(
             cell_of(header, "Session"),
-            Some(2),
+            Some(3),
             "width {width}: {header}"
         );
         assert_eq!(cell_of(header, "Agent"), agent, "width {width}: {header}");

@@ -1,12 +1,13 @@
 ---
 source: tui/src/nori/hotkey_picker.rs
+assertion_line: 562
 expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
   Hotkeys
   Configure keyboard shortcuts
 
      Action                          Binding
-  ▏  Open Transcript                 ctrl + t            ▕
+  ▏› Open Transcript                 ctrl + t            ▕
      Open Editor                     ctrl + g
      Move Backward Char              ctrl + b
      Move Forward Char               ctrl + f
