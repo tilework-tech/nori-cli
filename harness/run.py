@@ -5681,8 +5681,129 @@ def s35r_agent_commands_alone(ctx):
 
 SCENARIOS.update({"S35r": ("#791 L2: agent commands with and without arguments reach the agent once", s35r_agent_commands_alone)})
 
+
+def s50_audit(hist, tag, rows=40):
+    """Each streamed row once and in order; each plan update once, and where it sits relative to the rows."""
+    lines = hist.splitlines()
+    seen = [int(m.group(1)) for l in lines for m in re.finditer(rf"{tag} row (\d\d) of", l)]
+    pos = {}
+    for i, l in enumerate(lines):
+        for m in re.finditer(rf"{tag} row (\d\d) of", l):
+            pos.setdefault(int(m.group(1)), i)
+    plans, place = {}, {}
+    for k in range(1, rows // 5 + 1):
+        at = [i for i, l in enumerate(lines) if re.search(rf"{tag} step {k} done\b", l)]
+        plans[k] = len(at)
+        if at:
+            lo, hi = pos.get(5 * k, -1), pos.get(5 * k + 1, len(lines))
+            place[k] = "after its rows" if lo < at[0] < hi else ("before its rows" if at[0] < lo else "later")
+    return {"rows_once_in_order": seen == list(range(1, rows + 1)), "row_count": len(seen),
+            "dup_rows": len(seen) - len(set(seen)), "missing": sorted(set(range(1, rows + 1)) - set(seen))[:10],
+            "plans_once": all(c == 1 for c in plans.values()) and len(plans) == rows // 5, "plan_counts": plans,
+            "plan_place": sorted(set(place.values())), "finished_once": hist.count(f"{tag} stage finished.")}
+
+
+def s50_streamed_ctrl_l(ctx):
+    """#791: a live reply streamed in mid-line chunks, with plan updates, is shown once after Ctrl+L: in the controller
+    (Ctrl+L mid-stream), a watcher (Ctrl+L after), a fresh attach (replay), and plain nori."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("controller")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    b = ctx.term("watcher")
+    j_open(ctx, b, sid)
+    b.wait_for("dawn relay finished.", 15)
+    submit(a, "stage 40 gull")
+    wait_ledger(ctx, lambda r: r.get("kind") == "stage" and r.get("n", 0) >= 8, 20)
+    a.keys("C-l")
+    a.capture("controller-after-ctrl-l-mid-stream")
+    wait_ledger(ctx, lambda r: r.get("kind") == "turn_end" and r.get("stopReason") and any(x.get("kind") == "stage" and x.get("n") == 40 for x in ctx.ledger()), 40)
+    time.sleep(2.0)
+    a.capture("controller-done")
+    out = {}
+    out["controller"] = s50_audit(r_inline_history(a), "gull")
+    out["watcher"] = s50_audit(r_inline_history(b), "gull")
+    b.capture("watcher-inline")
+    c = ctx.term("fresh")
+    j_open(ctx, c, sid)
+    c.wait_for("gull stage finished.", 20)
+    time.sleep(1.0)
+    out["fresh_attach_replay"] = s50_audit(r_inline_history(c), "gull")
+    c.capture("fresh-inline")
+    p = k_plain(ctx, "plain")
+    submit(p, "stage 40 heron")
+    p.wait_for("heron stage finished.", 40)
+    time.sleep(1.5)
+    out["plain_nori_live"] = s50_audit(p.history(), "heron")
+    p.capture("plain-done")
+    (ctx.dir / "audit.json").write_text(json.dumps(out, indent=2))
+    for who, au in out.items():
+        ctx.check(f"{who}.rows_once_in_order", au["rows_once_in_order"], au)
+        ctx.check(f"{who}.plans_once", au["plans_once"], au["plan_counts"])
+        ctx.check(f"{who}.finished_once", au["finished_once"] == 1, au["finished_once"])
+        ctx.check(f"{who}.plans_after_their_rows", au["plan_place"] == ["after its rows"], au["plan_place"])
+
+
+def s41i_poll(t, query, want, label, timeout=4.0):
+    t0 = time.monotonic(); t.type(query); stuck = False; got = None
+    while time.monotonic() - t0 < timeout:
+        sc = t.screen()
+        if want in sc:
+            got = round((time.monotonic() - t0) * 1000); break
+        time.sleep(0.03)
+    sc = t.screen()
+    stuck = got is None and re.search(r"(?i)loading", sc) is not None
+    t.capture(label)
+    return {"query": query, "shown_ms": got, "loading_stuck": stuck, "client_file": "decoy_laptop" in sc}
+
+
+def s41i_reopen(t, query, want, prefix):
+    """Open @ once, then clear with Ctrl+U, retype; then delete to `@` with Backspace, retype; then dismiss with Esc, retype."""
+    out = []
+    t.keys("C-u")
+    out.append(s41i_poll(t, query, want, f"{prefix}-1-first"))
+    t.keys("C-u"); time.sleep(0.3)
+    out.append(s41i_poll(t, query, want, f"{prefix}-2-after-ctrl-u"))
+    for _ in range(len(query) - 1):
+        t.keys("BSpace")
+    time.sleep(0.3)
+    out.append(s41i_poll(t, query[1:], want, f"{prefix}-3-after-backspace"))
+    t.keys("Escape"); time.sleep(0.3); t.keys("C-u"); time.sleep(0.3)
+    out.append(s41i_poll(t, query, want, f"{prefix}-4-after-escape"))
+    t.keys("C-u")
+    return out
+
+
+def s41i_reopened_at(ctx):
+    """#791: the same @ query typed again after clearing it is answered again (no endless loading): remote attach with
+    no session, remote attach in a session, and plain nori."""
+    ctx.start_host(cwd="alpha", log=True)
+    c = remote_attach(ctx, "controller")
+    screen = c.wait_for(r"(Sessions|›)", 20, regex=True)
+    if "No sessions yet" in screen or "Sessions" in screen:
+        c.keys("Escape")
+    c.wait_for("›", 10)
+    res = {"remote_no_session": s41i_reopen(c, "@lan", "lantern_wick", "nosession")}
+    new_session_typed(ctx, c, f"/new {ctx.fx['roots']['beta']}")
+    res["remote_in_session"] = s41i_reopen(c, "@harb", "harbor_tide", "session")
+    p = k_plain(ctx, "plain")
+    res["plain_nori"] = s41i_reopen(p, "@lan", "lantern_wick", "plain")
+    (ctx.dir / "reopen.json").write_text(json.dumps(res, indent=2))
+    for where, tries in res.items():
+        for i, r in enumerate(tries):
+            ctx.check(f"{where}.try{i + 1}_answered", r["shown_ms"] is not None and not r["loading_stuck"], r)
+        ctx.check(f"{where}.never_client_file", not any(r["client_file"] for r in tries), tries)
+
+
+SCENARIOS.update({
+    "S50": ("#791: streamed reply with plans shown once across Ctrl+L, watcher, fresh attach and plain nori", s50_streamed_ctrl_l),
+    "S41i": ("#791: a reopened @ search is answered again, remote with and without a session, and plain nori", s41i_reopened_at),
+})
+
 FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "R12": {"top_extra": NO_UPDATE}, "R13": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
+FIXTURE_ARGS.update({"S50": {"top_extra": NO_UPDATE}, "S41i": {"top_extra": NO_UPDATE}})
 
 
 def main():

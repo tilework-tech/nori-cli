@@ -32,6 +32,9 @@ Prompt words (first word of the prompt text):
            idle with stopReason cancelled for the same turn id
   relay N TAG  stream N list rows "TAG row NN" one every 250 ms (records each
            row), then reply; stops early on cancel
+  stage N TAG  stream N rows "TAG row NN", each split into three chunks 15 ms
+           apart (so most chunks end mid-line), with a plan update
+           "TAG step K" after every 5th row; records each row and plan
   anything else: reply "<name> heard: <text>"
 """
 import json
@@ -124,6 +127,30 @@ def run_prompt(rid, sid, text):
         cancelled.discard(sid)
         ledger("turn_end", sessionId=sid, stopReason="cancelled", ticks=ticks)
         send(id=rid, result={"stopReason": "cancelled"})
+        return
+    if word == "stage":
+        parts = text.split()
+        count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 30
+        tag = parts[2] if len(parts) > 2 else "stage"
+        for n in range(1, count + 1):
+            if sid in cancelled:
+                break
+            line = f"- {tag} row {n:02d} of the long streamed reply\n"
+            for piece in (line[:7], line[7:19], line[19:]):
+                chunk(sid, "agent_message_chunk", piece)
+                time.sleep(0.015)
+            ledger("stage", sessionId=sid, tag=tag, n=n)
+            if n % 5 == 0:
+                update(sid, {"sessionUpdate": "plan", "entries": [
+                    {"content": f"{tag} step {n // 5} done", "priority": "medium", "status": "completed"},
+                    {"content": f"{tag} step {n // 5 + 1} next", "priority": "low", "status": "pending"}]})
+                ledger("stage_plan", sessionId=sid, tag=tag, k=n // 5)
+        stop = "cancelled" if sid in cancelled else "end_turn"
+        cancelled.discard(sid)
+        if stop == "end_turn":
+            chunk(sid, "agent_message_chunk", f"\n{tag} stage finished.")
+        ledger("turn_end", sessionId=sid, stopReason=stop)
+        send(id=rid, result={"stopReason": stop})
         return
     if word == "relay":
         parts = text.split()
