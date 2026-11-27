@@ -114,6 +114,7 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<HostS
         SlashCommand::Context => served(features.context, false),
         SlashCommand::Compact => served(features.compact, true),
         SlashCommand::Agent => served(features.agents, true),
+        SlashCommand::Model | SlashCommand::Config => served(features.session_config, true),
         SlashCommand::Quit
         | SlashCommand::Exit
         | SlashCommand::Settings
@@ -121,8 +122,6 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<HostS
         | SlashCommand::Logout
         | SlashCommand::Screen
         | SlashCommand::Sessions
-        | SlashCommand::Model
-        | SlashCommand::Config
         | SlashCommand::Approvals
         | SlashCommand::New
         | SlashCommand::Delegate
@@ -319,7 +318,7 @@ mod tests {
                 Some(NOT_ON_THIS_HOST),
             ),
             (
-                SlashCommand::Model,
+                SlashCommand::Resume,
                 joined(false, true),
                 Some(NOT_IN_ATTACH),
             ),
@@ -391,6 +390,34 @@ mod tests {
                 expected.map(str::to_string),
                 "/agent in {surface:?}"
             );
+        }
+    }
+
+    #[test]
+    fn a_joined_controller_changes_model_and_config_only_on_a_host_that_serves_them() {
+        let joined = |watching, connected, session_config| Surface::Joined {
+            watching,
+            connected,
+            features: HostFeatures {
+                session_config,
+                ..HostFeatures::default()
+            },
+        };
+        for command in [SlashCommand::Model, SlashCommand::Config] {
+            let cases = [
+                (joined(false, true, false), Some(NOT_ON_THIS_HOST)),
+                (joined(false, true, true), None),
+                (joined(true, true, true), Some(WATCHING)),
+                (joined(false, false, true), Some(RECONNECTING)),
+            ];
+            for (surface, expected) in cases {
+                assert_eq!(
+                    unavailable_reason(command, surface),
+                    expected.map(str::to_string),
+                    "/{} in {surface:?}",
+                    command.command()
+                );
+            }
         }
     }
 

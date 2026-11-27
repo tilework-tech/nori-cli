@@ -207,6 +207,15 @@ impl App {
             AppEvent::ChooseHostAgent { slug, name } => {
                 self.chat_widget.choose_host_agent(slug, name);
             }
+            AppEvent::HostSessionConfigSet {
+                session_id,
+                config_id,
+                option_name,
+                value_name,
+                result,
+            } => self.with_joined_widget(session_id, |widget| {
+                widget.on_host_session_config_set(config_id, option_name, value_name, result);
+            }),
             AppEvent::HostAgentNotReplaced {
                 session_id,
                 message,
@@ -217,8 +226,9 @@ impl App {
                 session_id,
                 slug,
                 name,
+                options,
             } => self.with_joined_widget(session_id, |widget| {
-                widget.on_host_agent_replaced(slug, name);
+                widget.on_host_agent_replaced(slug, name, options);
             }),
             AppEvent::HostFoldersFound {
                 generation,

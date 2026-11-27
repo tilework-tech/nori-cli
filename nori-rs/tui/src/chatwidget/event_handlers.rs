@@ -154,6 +154,13 @@ impl ChatWidget {
                     self.on_error(message);
                 }
             }
+            nori_protocol::AcpEvent::Response {
+                response:
+                    Ok(nori_protocol::acp::v1::AgentResponse::SetSessionConfigOptionResponse(response)),
+                ..
+            } if self.host_connection.is_some() => {
+                self.adopt_host_config_answer(response.config_options);
+            }
             nori_protocol::AcpEvent::Request { .. }
             | nori_protocol::AcpEvent::Response { .. }
             | nori_protocol::AcpEvent::Notification(_) => {}

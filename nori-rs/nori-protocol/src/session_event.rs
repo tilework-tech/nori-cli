@@ -40,7 +40,9 @@ pub enum AcpEvent {
 
 /// ACP's untagged `AgentResponse` lets the all-optional
 /// `AuthenticateResponse` absorb any payload, so a prompt response read back
-/// from the wire is recognised by its required `stopReason`.
+/// from the wire is recognised by its required `stopReason`, and a
+/// `session/set_config_option` answer by carrying nothing but its required
+/// `configOptions` (and `_meta`).
 fn deserialize_agent_response<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Result<acp::v1::AgentResponse, acp::v1::Error>, D::Error> {
@@ -50,6 +52,22 @@ fn deserialize_agent_response<'de, D: serde::Deserializer<'de>>(
         Ok(payload) if payload.get("stopReason").is_some() => serde_json::from_value(payload)
             .map(|response| Ok(acp::v1::AgentResponse::PromptResponse(response)))
             .map_err(D::Error::custom),
+        Ok(payload)
+            if payload.get("configOptions").is_some()
+                && payload.as_object().is_some_and(|fields| {
+                    fields
+                        .keys()
+                        .all(|key| key == "configOptions" || key == "_meta")
+                }) =>
+        {
+            serde_json::from_value(payload)
+                .map(|response| {
+                    Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(
+                        response,
+                    ))
+                })
+                .map_err(D::Error::custom)
+        }
         Ok(payload) => serde_json::from_value(payload)
             .map(Ok)
             .map_err(D::Error::custom),
@@ -435,6 +453,60 @@ mod response_wire_tests {
                     response: Ok(acp::v1::AgentResponse::PromptResponse(response)),
                     ..
                 } if response.stop_reason == acp::v1::StopReason::EndTurn
+            ),
+            "{received:?}"
+        );
+    }
+
+    #[test]
+    fn a_config_option_answer_keeps_its_options_across_the_wire() {
+        let options = vec![
+            acp::v1::SessionConfigOption::select(
+                "model",
+                "Model",
+                "synthetic-fast",
+                vec![acp::v1::SessionConfigSelectOption::new(
+                    "synthetic-fast",
+                    "Synthetic Fast",
+                )],
+            )
+            .category(acp::v1::SessionConfigOptionCategory::Model),
+        ];
+        let sent = AcpEvent::Response {
+            request_id: RequestId::Str("synthetic-set".into()),
+            response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(
+                acp::v1::SetSessionConfigOptionResponse::new(options.clone()),
+            )),
+        };
+        let received = round_trip(&sent);
+        assert!(
+            matches!(
+                &received,
+                AcpEvent::Response {
+                    response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(response)),
+                    ..
+                } if response.config_options == options
+            ),
+            "{received:?}"
+        );
+    }
+
+    #[test]
+    fn a_new_session_answer_with_options_is_not_taken_for_a_config_answer() {
+        let sent = AcpEvent::Response {
+            request_id: RequestId::Str("synthetic-new".into()),
+            response: Ok(acp::v1::AgentResponse::NewSessionResponse(
+                acp::v1::NewSessionResponse::new("synthetic-session").config_options(vec![]),
+            )),
+        };
+        let received = round_trip(&sent);
+        assert!(
+            !matches!(
+                &received,
+                AcpEvent::Response {
+                    response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(_)),
+                    ..
+                }
             ),
             "{received:?}"
         );

@@ -98,6 +98,9 @@ pub(crate) struct HostFeatures {
     /// The host lists the ACP agent servers it can start, each with whether
     /// it can start now, in its `initialize` reply.
     pub agents: bool,
+    /// `session/set_config_option` changes a session's ACP options. Every
+    /// host that lists its agents serves it.
+    pub session_config: bool,
 }
 
 impl HostConnection {
@@ -119,6 +122,7 @@ impl HostConnection {
                 compact: true,
                 shell: true,
                 agents: true,
+                session_config: true,
             },
             agents: Vec::new(),
         }

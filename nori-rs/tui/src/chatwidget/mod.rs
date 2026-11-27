@@ -71,6 +71,7 @@ mod goal;
 mod goal_host;
 mod helpers;
 mod host_agents;
+mod host_config;
 mod host_role;
 pub(crate) use host_role::JOINED_COMMANDS;
 mod history_host;

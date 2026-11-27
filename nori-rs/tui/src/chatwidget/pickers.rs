@@ -675,6 +675,10 @@ impl ChatWidget {
     /// Model-category config option, open the value picker for it. Otherwise
     /// show a static "not supported" message.
     pub(crate) fn open_model_popup(&mut self) {
+        if self.host_connection.is_some() {
+            self.open_joined_model_popup();
+            return;
+        }
         // The advertised configuration is already tracked, so the picker opens
         // from it rather than re-fetching what the agent already told us.
         let advertised_model = self
@@ -717,6 +721,10 @@ impl ChatWidget {
 
     /// Open the generic ACP session-config picker.
     pub(crate) fn open_session_config_popup(&mut self) {
+        if self.host_connection.is_some() {
+            self.open_joined_config_popup(None);
+            return;
+        }
         // Open from the tracked configuration when the agent has advertised
         // one; only an agent that has not yet announced anything needs a fetch.
         if !self.agent_config().is_empty() {
@@ -761,6 +769,10 @@ impl ChatWidget {
         &mut self,
         option: nori_protocol::acp::v1::SessionConfigOption,
     ) {
+        if self.host_connection.is_some() {
+            self.open_joined_value_picker(option);
+            return;
+        }
         let extra_models = nori_harness::get_agent_config(&self.config.active_agent)
             .ok()
             .and_then(|config| match config.builtin_kind {
@@ -793,6 +805,10 @@ impl ChatWidget {
         value_name: String,
         is_custom_model: bool,
     ) {
+        if self.host_connection.is_some() {
+            self.set_joined_config_option(config_id, value, option_name, value_name);
+            return;
+        }
         if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             let generation = self.acp_mode_config_generation;

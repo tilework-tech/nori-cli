@@ -162,6 +162,19 @@ impl AgentHost {
         }
     }
 
+    /// Plain `nori` in the host's project folder with the host's config, once
+    /// its first session is ready. It runs its own private host.
+    pub fn plain(&self) -> TuiSession {
+        let mut terminal = self.spawn(
+            &self.project(),
+            &["--agent", "amber"],
+            self.nori_home.path(),
+            self.home.path(),
+        );
+        terminal.wait_until_ready().unwrap();
+        terminal
+    }
+
     /// The ACP methods `agent`'s fixture processes received, in order.
     pub fn trace(&self, agent: &str) -> Vec<String> {
         std::fs::read_to_string(self.project().join(format!("fixture-traffic-{agent}")))

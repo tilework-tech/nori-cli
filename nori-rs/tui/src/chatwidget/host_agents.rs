@@ -17,8 +17,7 @@ use crate::history_cell;
 use crate::host_client::HostCall;
 use crate::host_client::agents::HostAgent;
 
-/// The option the host owns for a session's agent.
-const AGENT_OPTION: &str = "agent";
+use super::host_config::AGENT_OPTION;
 
 /// An in-place agent change this terminal asked for.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -120,10 +119,11 @@ impl ChatWidget {
                 });
                 tokio::spawn(async move {
                     match reply.await {
-                        Ok(_) => tx.send(AppEvent::HostAgentReplaced {
+                        Ok(result) => tx.send(AppEvent::HostAgentReplaced {
                             session_id: id,
                             slug,
                             name,
+                            options: super::host_config::reported_options(&result),
                         }),
                         Err(error) => tx.send(AppEvent::HostAgentNotReplaced {
                             session_id: id,
@@ -159,8 +159,14 @@ impl ChatWidget {
     }
 
     /// The host changed this session's agent in place.
-    pub(crate) fn on_host_agent_replaced(&mut self, slug: String, name: String) {
+    pub(crate) fn on_host_agent_replaced(
+        &mut self,
+        slug: String,
+        name: String,
+        options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
+    ) {
         self.agent_change = AgentChange::None;
+        self.adopt_host_config_answer(options);
         self.config.active_agent.clone_from(&slug);
         self.config.agent = slug;
         self.bottom_pane.set_agent_display_name(name.clone());

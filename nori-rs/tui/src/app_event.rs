@@ -123,6 +123,15 @@ pub(crate) enum AppEvent {
         name: String,
     },
 
+    /// A joined host's answer to setting one of a session's options.
+    HostSessionConfigSet {
+        session_id: nori_harness::ConversationId,
+        config_id: String,
+        option_name: String,
+        value_name: String,
+        result: Result<Vec<nori_protocol::acp::v1::SessionConfigOption>, String>,
+    },
+
     /// A joined host refused to change this session's agent.
     HostAgentNotReplaced {
         session_id: nori_harness::ConversationId,
@@ -134,6 +143,8 @@ pub(crate) enum AppEvent {
         session_id: nori_harness::ConversationId,
         slug: String,
         name: String,
+        /// The session's options for the new agent, as the host reported them.
+        options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
     },
 
     /// A joined host's folders for the `/new` Tab typed in `generation`'s
