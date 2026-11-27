@@ -30,6 +30,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/mac" target/mock-acp-out
           cargo +nightly build -p mock-acp-agent --profile ci-test --target aarch64-apple-darwin --artifact-dir target/mock-acp-out -Z unstable-options
+          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target aarch64-apple-darwin
           export MOCK_ACP_AGENT_BIN="$GITHUB_WORKSPACE/nori-rs/target/mock-acp-out/mock_acp_agent"
           sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/attach_agents.rs
           sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
@@ -45,7 +46,7 @@ jobs:
       - name: Acceptance harness (independent verifier)
         uses: actions/checkout@v6
         with:
-          ref: 446439cc510cbf04a820a62556ff3fbf4c9b2d47
+          ref: c97656ff124dab0e8cf3cf9fa37a5a45c20c8b5f
           path: acc
           persist-credentials: false
       - name: Interactive tmux scenarios on native macOS
