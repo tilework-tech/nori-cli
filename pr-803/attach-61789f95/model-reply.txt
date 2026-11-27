@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• amber options: Permission=Explore, Model=Initial, Effort=Low (/config to change)
+
+
+› whoami
+
+
+
+› whoami
+
+
+• amber is answering (1) with model initial, effort low.
+
+• amber option set: Model=Amber
+
+
+› whoami
+
+
+
+› whoami
+
+
+• amber is answering (2) with model amber, effort low.
+
+                                                                                                   [ Explore ]
+〉
+
+  / commands · @ files · ? help · controlling · project · amber · ready · Approvals: Agent · ctrl+d detach

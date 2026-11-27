@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Started a new session with Amber. The previous conversation keeps running; Alt+S switches to it.
+
+• amber options: Speed=Slow (/config to change)
+
+
+› whoami
+
+
+
+› whoami
+
+
+• amber is answering (1).
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                          Agent         Status
+   ○ whoamiwhoami                                                   birch         ready
+     project · birch is answering (1).                                            19s ago
+▏› ○ whoamiwhoami (on screen)                                       amber         ready                      ▕
+▏    project · amber is answering (1).                                            3s ago                     ▕
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

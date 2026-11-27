@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Started a new session with Amber. The previous conversation keeps running; Alt+S switches to it.
+
+• amber options: Speed=Slow (/config to change)
+
+
+› whoami
+
+
+
+› whoami
+
+
+• amber is answering (1).
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · ? help · controlling · project · amber · ready · Approvals: Agent · ctrl+d detach

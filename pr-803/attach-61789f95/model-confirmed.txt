@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• amber options: Permission=Explore, Model=Initial, Effort=Low (/config to change)
+
+
+› whoami
+
+
+
+› whoami
+
+
+• amber is answering (1) with model initial, effort low.
+
+• amber option set: Model=Amber
+
+
+  Session config
+  Select an ACP session setting to change
+
+  ▏› 1. Model (Amber)                                                                                      ▕
+     2. Effort (Low)
+
+  ↑↓/j/k move  enter select  esc close
+

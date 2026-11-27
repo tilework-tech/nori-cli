@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• birch options: Speed=Slow (/config to change)
+
+
+› whoami
+
+
+
+› whoami
+
+
+• birch is answering (1).
+
+
+  Choose an agent
+  Starts a new session with it; this conversation keeps running
+
+     6. Grok Build
+        Installed
+     7. OpenCode
+        Adapter not installed. install OpenCode and add `opencode` to PATH
+     8. Cursor Agent
+        Installed
+     9. Hermes Agent
+        Adapter not installed. install Hermes Agent with its ACP extra on PATH and run `hermes acp --check…
+        Pi
+        Installed
+  ▏›    Amber                                                                                              ▕
+  ▏     Installed                                                                                          ▕
+  ↑↓/j/k move  enter select  esc close
+
