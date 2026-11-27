@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /private/tmp/abv-fw26/host-project
+  Agent        Kestrel
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+〉
+
+  / commands · ! shell · @ files · ? help

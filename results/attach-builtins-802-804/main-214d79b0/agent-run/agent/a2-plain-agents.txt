@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /tmp/abv-7yAt/host-project
+  Agent        Kestrel
+
+• Kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• Unrecognized command '/agents'. Type "/" for a list of supported commands.
+
+
+/ agents
+
+  no matches
+
+
+
+
+
+
+
+

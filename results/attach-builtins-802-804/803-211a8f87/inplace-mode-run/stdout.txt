@@ -1,0 +1,13 @@
+PASS M1a        in-place change to Osprey announced
+FAIL M1b        controller shows Osprey's own native mode (missing /\[ workspace-write \]/ in m1-after-switch)
+FAIL M1c        hint row after 12 s: 22.12s  badge=                     hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+PASS M2a        next prompt goes to Osprey in its own mode
+PASS M2b        next prompt does not reach Kestrel
+FAIL M2c        hint row names the new agent after the first prompt (missing /controlling .* codex .* ready/ in m2-first-prompt)
+PASS M3a        controller badge follows the host receipt (read-only)
+PASS M3b        agent confirms read-only
+PASS M4a        fresh attach (list) shows the new agent's current native mode
+PASS M4b        fresh attach hint row names the new agent
+PASS M5a        fresh attach by ID shows the new agent's current native mode
+PASS M5b        fresh attach by ID opens that session
+PASS M6a        badge clears when the replacement has no native mode

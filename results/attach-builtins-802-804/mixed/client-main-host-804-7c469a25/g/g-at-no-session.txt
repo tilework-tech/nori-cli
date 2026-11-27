@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+■ No session is open on this host. Pick one with /sessions.
+
+
+〉@harbor-chart
+
+  harbor-chart-on-host.md

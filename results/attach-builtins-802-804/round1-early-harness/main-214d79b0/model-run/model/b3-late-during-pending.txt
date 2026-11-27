@@ -1,0 +1,40 @@
+
+› /modelstatus
+
+
+• Kestrel read: /modelstatus
+
+
+› /model/model
+
+
+• Kestrel read: /model/model
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-Rmhw/host-project.
+
+
+› /configstatus
+
+
+• Kestrel read: /configstatus
+
+
+› /modelstatus
+
+
+• Kestrel read: /modelstatus
+
+• This terminal now controls the host.
+
+■ /model: not available in nori attach yet
+
+  2 ready
+
+
+/ model
+
+  /model  not available in nori attach yet

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Started a new session with Lark. The previous conversation keeps running; Alt+S switches to it.
+
+• lark options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Lark turn 1 on lark-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-Aq1k/host-project.
+
+Sessions 4 · 4 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                          Agent         Status
+   ○ status                                                         lark          ready
+     host-project · Lark turn 1 on lark-1: model harbor-mini, eff…  harbor-mini   33s ago
+   ○ status                                                         lark          ready
+     host-project · Lark read: tidepool marker                      harbor-mini   19s ago
+   ○ status                                                         kestrel       ready
+     host-project · Kestrel turn 1 on kestrel-1: model harbor-min…  harbor-mini   5s ago
+▏› ○ status (on screen)                                             lark          ready                      ▕
+▏    host-project · Lark turn 1 on lark-1: model harbor-mini, eff…  harbor-mini   0s ago                     ▕
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

@@ -1,0 +1,64 @@
+PASS A2a        slash menu lists /agent once
+FAIL A6a        Cedar row shows the host's reason (missing /not installed|cannot|not found/ in a6-picker-cedar)
+FAIL A6b        Enter on Cedar explains the refusal (missing /Cedar cannot start on this host/ in a6-cedar-enter)
+FAIL A6c        picker stays open after the refusal (missing /Choose an agent/ in a6-cedar-enter)
+PASS A6d        refusal starts no session
+FAIL A1a        no lark session on host
+FAIL A1b        Lark answers in the new session (missing /Lark turn 1 on lark-1/ in a1-lark-reply)
+FAIL A3a        ID c8586151-7699-42fc-860a-a3d10c8fdd5c not running lark
+FAIL A3b        session count 1, expected 2
+FAIL A3c        the next prompt reaches Lark, not Kestrel (missing /Lark turn 1/ in a3-reply)
+FAIL A3d        controller footer names the new agent after the in-place change (missing /controlling .* lark .* ready/ in a3-reply)
+FAIL A3e        controller slash menu names the new agent (missing //model .*current: lark/ in a3-controller-slash)
+PASS A5a        watcher keeps the session after the in-place change
+FAIL A5b        watcher sees the new agent's reply (missing /Lark turn 1/ in a5-watcher-after)
+FAIL A5c        watcher's /agent is greyed with the take-control hint (missing //agent .*watching/ in a5-watcher-slash)
+PASS A7a        a later attach opens the in-place-changed session
+FAIL A7b        a later attach replays the new agent's turn (missing /Lark turn 1/ in a7-late-attach)
+FAIL A4a        prompted session: notice names the new agent and Alt+S (missing /Started a new session with Lark/ in a4-beside)
+PASS A4b        previous conversation keeps running
+FAIL A4c        session count 2, expected 4
+FAIL A4d        Alt+S back: the old conversation still answers (missing /Kestrel turn 2/ in a4-back)
+PASS A2b        plain nori /agents opens the agent picker
+PASS C0a        /mention is offered in attach
+FAIL C0b        /mention is not greyed on a current host (found //mention .*not available/ in c0-slash)
+FAIL C1a        no session: host folder file is offered (missing /harbor-chart-on-host.md/ in c1-no-session)
+PASS C1b        no session: the attaching folder is never searched
+FAIL C1c        in a session: session folder file is offered (missing /harbor-chart-on-host.md/ in c1-session)
+PASS C1d        in a session: client file not offered
+FAIL C2a        Tab inserts the host path (missing /〉@?harbor-chart-on-host.md/ in c2-inserted)
+FAIL C2b        agent prompt lacks the host path
+FAIL C5a        image prompt: 21:29:48 prompt kestrel-1 '/mentionharbor-buoy' blocks=['text']
+FAIL C3a        search follows the foreground session's folder (missing /harbor-chart-in-other-host-folder.md/ in c3-other-folder)
+PASS C3b        other folders are not mixed in
+FAIL C4a        a watcher's /mention searches the watched session's host folder (missing /harbor-chart-in-other-host-folder.md/ in c4-watcher)
+PASS C6a        plain nori /mention completes from its own folder
+PASS C6b        plain nori inserts the same way
+FAIL B1a        host-confirmed /model change is announced (missing /option set: Model=harbor-max/ in b1-confirmed)
+FAIL B1b        next reply uses the confirmed model (missing /model harbor-max/ in b1-reply)
+FAIL B2a        agent rejection is shown (missing /refuses model kestrel-classic|rejected|failed|error/ in b2-rejected)
+PASS B2b        rejected value is not announced as set
+FAIL B2c        picker still shows the confirmed model after a rejection (missing /harbor-max \(current\)/ in b2-picker-after)
+FAIL B2d        agent still runs the confirmed model (missing /turn 2 .*model harbor-max/ in b2-reply)
+FAIL B5a        /config lists Model with the confirmed value (missing /Model \(harbor-max\)/ in b5-config)
+PASS B5b        /config leaves out agent and permission mode
+FAIL B5c        effort change confirmed (missing /option set: .*Effort=High|Effort=High/ in b5-effort)
+FAIL B5d        next reply uses effort high (missing /turn 3 .*effort high/ in b5-reply)
+FAIL B4a        a later attach (after Alt+T) sees the confirmed model (missing /harbor-max \(current\)/ in b4-late-model)
+PASS B3a        delayed answer does not land in the other session
+PASS B3b        other session's config untouched
+FAIL B3c        delayed answer is shown in the session it was made in (missing /option set: Model=harbor-mini/ in b3-back)
+FAIL B3d        agent confirms the delayed change (missing /turn 4 .*model harbor-mini/ in b3-back-reply)
+FAIL B3e        terminal attached while the answer was pending sees it (missing /harbor-mini \(current\)/ in b3-late-during-pending)
+FAIL B6a        watcher's /model is greyed (missing //model .*watching/ in b6-watcher-slash)
+FAIL B6b        watcher's /config is greyed (missing //config .*watching/ in b6-watcher-config)
+PASS R1a        /config hides the native mode option
+FAIL R1b        agent confirms the native mode change (missing /mode read-only/ in r1-reply)
+FAIL R1d        controller's mode badge does not show the replaced native mode (found /\[ workspace-write \]/ in r1-reply)
+PASS R1e        footer shows the approval mode once
+FAIL R1c        later attach shows Ask as current (missing /Ask \(current\)/ in r1-late-approvals)
+FAIL R1f        later attach's mode badge does not show the replaced native mode (found /\[ workspace-write \]/ in r1-late-control)
+FAIL R2a        no in-place Moss replacement
+PASS R2b        controller no longer offers the previous agent's model
+PASS R2c        later attach does not offer the replaced agent's models
+PASS B7a        plain nori /model lists the advertised models

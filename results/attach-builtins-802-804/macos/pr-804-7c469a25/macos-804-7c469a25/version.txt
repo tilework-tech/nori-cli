@@ -1,0 +1,2 @@
+nori-ai-cli 0.0.0
+95aa317aaca5ca0295c4f52ecf41e9a9ef7cf3c014b19ad04d7f566ff31cc872  /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/aarch64-apple-darwin/release/nori

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› who answers
+
+
+• claude-code heard: who answers
+
+                                                                                                                [ auto ]
+〉
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach            ⎇ nori/attach-builtins-accept...

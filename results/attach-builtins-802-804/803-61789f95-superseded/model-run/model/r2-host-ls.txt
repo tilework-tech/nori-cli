@@ -1,0 +1,5 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+539432ec-8611-4960-adee-8411fd2eeccb  kestrel           ready                 2m  /tmp/abv-x51O/host-project  status
+c8f5353b-7257-475c-8a69-80e2523e28d4  lark              ready                 2m  /tmp/abv-x51O/host-project  status
+f543699d-af89-40ea-b68b-c2d5a3467298  codex             ready                 1m  /tmp/abv-x51O/host-project  status
+3d1cbe3a-f24a-4e62-9621-8fe0cf8eb57b  moss              ready                13s  /tmp/abv-x51O/host-project  -

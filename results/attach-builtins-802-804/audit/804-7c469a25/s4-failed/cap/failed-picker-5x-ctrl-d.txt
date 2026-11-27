@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 1 · 1 failed  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› ✕ new session                                                              gemini        failed                     ▕
+▏    no reply yet                                                                           16s ago                    ▕
+
+↑↓/j/k move  enter open  ctrl+r resume  ctrl+d close  tab waiting on you  esc close
+

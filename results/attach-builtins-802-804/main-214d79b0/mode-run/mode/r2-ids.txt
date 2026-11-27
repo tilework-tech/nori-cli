@@ -1,0 +1,4 @@
+K3=c10b5059-ca77-4989-ab3c-564208dc200c O1=9b1331ab-6f2e-4c8f-b83b-7add622ca7df
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+9b1331ab-6f2e-4c8f-b83b-7add622ca7df  codex             ready                 1m  /tmp/abv-B4S5/host-project  status
+c10b5059-ca77-4989-ab3c-564208dc200c  kestrel           ready                40s  /tmp/abv-B4S5/host-project  /model/agent

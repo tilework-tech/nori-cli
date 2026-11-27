@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0mCodex options: Mode=[1m[38;5;6mworkspace-write[0m, Model=[1m[38;5;6mharbor-mini[0m, Effort=[1m[38;5;6mLow[0;2m (/config to change)[0m
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/config/approvals[49m
+
+
+[2m• [0mOsprey read: /config/approvals
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/config/approvals[49m
+
+
+[2m• [0mOsprey read: /config/approvals
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mOsprey turn 3 on osprey-1: model harbor-mini, effort low, mode workspace-write, cwd /private/tmp/abv-Yqxw/
+  host-project.
+
+[38;5;1m■ /config: not available in nori attach yet[39m
+
+  [2m3 ready[0m
+
+[48;2;43;43;43m                                                                                           [2m[ workspace-write ]
+[0m[38;5;2m[48;2;43;43;43m/[39m config
+
+[49m  [2m/[1mconfig[0;2m  not available in nori attach yet[0m

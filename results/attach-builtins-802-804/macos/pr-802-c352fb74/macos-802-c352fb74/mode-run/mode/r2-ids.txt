@@ -1,0 +1,4 @@
+K3=35c6fd75-f4ed-4718-a9bf-fcb55a53ee77 O1=9eceb395-1fc8-4caf-9039-32ff8893744e
+ID                                    AGENT             STATUS               AGE  CWD                                 TITLE
+9eceb395-1fc8-4caf-9039-32ff8893744e  codex             ready                 1m  /private/tmp/abv-0XIS/host-project  status
+35c6fd75-f4ed-4718-a9bf-fcb55a53ee77  kestrel           ready                42s  /private/tmp/abv-0XIS/host-project  /model/agent

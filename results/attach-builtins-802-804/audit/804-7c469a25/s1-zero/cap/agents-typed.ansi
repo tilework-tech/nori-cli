@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mNo session selected. Use /new to start one on this host. [38;5;8mAlt+S picks one; Ctrl+D detaches
+
+
+[39m  [1mChoose an agent
+[0m[39m[49m  [38;5;8mStarts a session with it on this host
+[39m
+  [1m[38;5;2m▏›[0m[39m[49m 1. Mock ACP                                                                                                     [1m[38;5;2m▕
+[0m[39m[49m  [1m[38;5;2m▏[0m[39m[49m     [38;5;8mAdapter not installed. Mock agent - no installation required                                                 [1m[38;5;2m▕
+[0m[39m[49m     2. Mock ACP Alt
+        [38;5;8mAdapter not installed. Mock agent - no installation required
+[39m     3. Lantern Claude
+        [38;5;8mInstalled[39m
+     4. Lantern Codex
+        [38;5;8mInstalled[39m
+     5. Antigravity
+        [38;5;8mAdapter not installed. install Antigravity from https://antigravity.google/cli and add `agy` to PATH
+[39m     6. Grok Build
+        [38;5;8mAdapter not installed. install npm and make `npx` available on PATH
+[39m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose[39m
+

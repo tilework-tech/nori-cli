@@ -1,0 +1,29 @@
+FAIL B1a        host-confirmed /model change is announced (missing /option set: Model=harbor-max/ in b1-confirmed)
+FAIL B1b        next reply uses the confirmed model (missing /model harbor-max/ in b1-reply)
+FAIL B2a        agent rejection is shown (missing /refuses model kestrel-classic|rejected|failed|error/ in b2-rejected)
+PASS B2b        rejected value is not announced as set
+FAIL B2c        picker still shows the confirmed model after a rejection (missing /harbor-max \(current\)/ in b2-picker-after)
+FAIL B2d        agent still runs the confirmed model (missing /turn 2 .*model harbor-max/ in b2-reply)
+FAIL B5a        /config lists Model with the confirmed value (missing /Model \(harbor-max\)/ in b5-config)
+PASS B5b        /config leaves out agent and permission mode
+FAIL B5c        effort change confirmed (missing /option set: .*Effort=High|Effort=High/ in b5-effort)
+FAIL B5d        next reply uses effort high (missing /turn 3 .*effort high/ in b5-reply)
+FAIL B4a        a later attach (after Alt+T) sees the confirmed model (missing /harbor-max \(current\)/ in b4-late-model)
+PASS B3a        delayed answer does not land in the other session
+PASS B3b        other session's config untouched
+FAIL B3c        delayed answer is shown in the session it was made in (missing /option set: Model=harbor-mini/ in b3-back)
+FAIL B3d        agent confirms the delayed change (missing /turn 4 .*model harbor-mini/ in b3-back-reply)
+FAIL B3e        terminal attached while the answer was pending sees it (missing /harbor-mini \(current\)/ in b3-late-during-pending)
+FAIL B6a        watcher's /model is greyed (missing //model .*watching/ in b6-watcher-slash)
+FAIL B6b        watcher's /config is greyed (missing //config .*watching/ in b6-watcher-config)
+PASS R1a        /config hides the native mode option
+FAIL R1b        agent confirms the native mode change (missing /mode read-only/ in r1-reply)
+FAIL R1d        controller's mode badge does not show the replaced native mode (found /\[ workspace-write \]/ in r1-reply)
+PASS R1e        footer shows the approval mode once
+FAIL R1c        later attach shows Ask as current (missing /Ask \(current\)/ in r1-late-approvals)
+FAIL R1f        later attach's mode badge does not show the replaced native mode (found /\[ workspace-write \]/ in r1-late-control)
+FAIL R2a        no in-place Moss replacement
+PASS R2b        controller no longer offers the previous agent's model
+FAIL R2d        later attach by ID opens the replaced session itself (missing /now runs Moss/ in r2-late-attach)
+PASS R2c        later attach does not offer the replaced agent's models
+PASS B7a        plain nori /model lists the advertised models

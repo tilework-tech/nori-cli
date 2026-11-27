@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• kestrel option set: Model=harbor-max
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-1KUk/host-project.
+
+■ Failed to set Model: Failed to set ACP session config option: Kestrel refuses model kestrel-classic
+
+
+  Model
+  Select a value for this ACP session setting
+
+     1. harbor-mini
+  ▏› 2. harbor-max (current)                                                                               ▕
+     3. kestrel-classic
+  ↑↓/j/k move  / search  enter select  esc close
+

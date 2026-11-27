@@ -1,0 +1,22 @@
+PASS A2a        slash menu lists /agent once
+PASS A6a        Cedar row shows the host's reason
+PASS A6b        Enter on Cedar explains the refusal
+PASS A6c        picker stays open after the refusal
+PASS A6d        refusal starts no session
+PASS A1a        empty host: /agents started a Lark session on the host
+PASS A1b        Lark answers in the new session
+PASS A3a        unprompted session changed agent in place under the same ID
+PASS A3b        in-place change created no extra session
+PASS A3c        the next prompt reaches Lark, not Kestrel
+FAIL A3d        controller footer names the new agent after the in-place change (missing /controlling .* lark .* ready/ in a3-reply)
+PASS A3e        controller slash menu names the new agent
+PASS A5a        watcher keeps the session after the in-place change
+FAIL A5b        watcher sees the new agent's reply (missing /Lark read: tidepool marker/ in a5-watcher-after)
+PASS A5c        watcher's /agent is greyed with the take-control hint
+PASS A7a        a later attach opens the in-place-changed session
+FAIL A7b        a later attach by ID opens the in-place-changed session itself (missing /tidepool marker/ in a7-late-attach)
+PASS A4a        prompted session: notice names the new agent and Alt+S
+PASS A4b        previous conversation keeps running
+PASS A4c        new session beside (4 sessions)
+PASS A4d        Alt+S back: the old conversation still answers
+PASS A2b        plain nori /agents opens the agent picker

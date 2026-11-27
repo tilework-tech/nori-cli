@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0mkestrel options: Model=[1m[38;5;6mharbor-mini[0m, Effort=[1m[38;5;6mLow[0;2m (/config to change)[0m
+
+[2m• [0mkestrel option set: Model=[1m[38;5;6mharbor-max[0m
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /private/tmp/abv-BqQ5/host-
+  project.
+
+[38;5;1m■ Failed to set Model: Failed to set ACP session config option: Kestrel refuses model kestrel-classic[39m
+
+[48;2;43;43;43m
+[1m〉[0m[48;2;43;43;43m
+
+[49m  [1m/[0;2m commands · [0;1m@[0;2m files · [0m[38;5;2mcontrolling[2m[39m · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach[0m

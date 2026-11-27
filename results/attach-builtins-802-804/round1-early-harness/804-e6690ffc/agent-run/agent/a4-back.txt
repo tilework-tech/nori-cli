@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-2HUq/host-project.
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-2HUq/host-project.
+
+  4 ready
+
+
+〉
+
+  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach

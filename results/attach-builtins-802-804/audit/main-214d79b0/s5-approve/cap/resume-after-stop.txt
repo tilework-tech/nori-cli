@@ -1,0 +1,36 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+                                                                                  Details
+     Conversation                             Updated           Branch
+  ▏› 04467ea6-4a06-4a0c-8df1-089dc9aac089     30 seconds ago    Not reported▕     Session         04467ea6-4a06-4a…
+     46144998-5d70-48c1-b8d9-fc89bdda3c43     59 seconds ago    Not reported      Project         4e82a48c698c1d38
+                                                                                  Agent           claude-code
+                                                                                  Working direc…  /home/sprite/org…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓/j/k browse  / search  enter resume  esc start new  ctrl+c quit
+

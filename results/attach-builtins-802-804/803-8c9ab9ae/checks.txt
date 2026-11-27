@@ -1,0 +1,90 @@
+PASS A2a        slash menu lists /agent once
+PASS A6a        Cedar row shows the host's reason
+PASS A6b        Enter on Cedar explains the refusal
+PASS A6c        picker stays open after the refusal
+PASS A6d        refusal starts no session
+PASS A1a        empty host: /agents started a Lark session on the host
+PASS A1b        Lark answers in the new session
+PASS A3a        unprompted session changed agent in place under the same ID
+PASS A3b        in-place change created no extra session
+PASS A3c        the next prompt reaches Lark, not Kestrel
+FAIL A3d        controller footer names the new agent after the in-place change (missing /controlling .* lark .* ready/ in a3-reply)
+FAIL A3e        controller slash menu names the new agent (missing //model .*current: lark/ in a3-controller-slash)
+PASS A5a        watcher keeps the session after the in-place change
+FAIL A5b        watcher sees the new agent's reply (missing /Lark read: tidepool marker/ in a5-watcher-after)
+PASS A5c        watcher's /agent is greyed with the take-control hint
+PASS A7a        a later attach opens the in-place-changed session
+FAIL A7b        a later attach by ID opens the in-place-changed session itself (missing /tidepool marker/ in a7-late-attach)
+PASS A4a        prompted session: notice names the new agent and Alt+S
+PASS A4b        previous conversation keeps running
+PASS A4c        new session beside (4 sessions)
+PASS A4d        Alt+S back: the old conversation still answers
+PASS A2b        plain nori /agents opens the agent picker
+PASS M1a        in-place change to Osprey announced
+PASS M1b        controller shows Osprey's own native mode
+PASS M1c        controller hint row names the new agent after 12 s
+PASS M2a        next prompt goes to Osprey in its own mode
+PASS M2b        next prompt does not reach Kestrel
+PASS M2c        hint row names the new agent after the first prompt
+PASS M3a        controller badge follows the host receipt (read-only)
+PASS M3b        agent confirms read-only
+PASS M4a        fresh attach (list) shows the new agent's current native mode
+PASS M4b        fresh attach hint row names the new agent
+PASS M5a        fresh attach by ID shows the new agent's current native mode
+PASS M5b        fresh attach by ID opens that session
+PASS M6a        badge clears when the replacement has no native mode
+PASS C0a        /mention is offered in attach
+FAIL C0b        /mention is not greyed on a current host (found //mention .*not available/ in c0-slash)
+FAIL C1a        no session: host folder file is offered (missing /harbor-chart-on-host.md/ in c1-no-session)
+PASS C1b        no session: the attaching folder is never searched
+FAIL C1c        in a session: session folder file is offered (missing /harbor-chart-on-host.md/ in c1-session)
+PASS C1d        in a session: client file not offered
+FAIL C2a        Tab inserts the host path (missing /〉@?harbor-chart-on-host.md/ in c2-inserted)
+FAIL C2b        agent prompt lacks the host path
+FAIL C5a        image prompt: 22:47:47 prompt kestrel-1 '/mentionharbor-buoy' blocks=['text']
+FAIL C3a        search follows the foreground session's folder (missing /harbor-chart-in-other-host-folder.md/ in c3-other-folder)
+PASS C3b        other folders are not mixed in
+FAIL C4a        a watcher's /mention searches the watched session's host folder (missing /harbor-chart-in-other-host-folder.md/ in c4-watcher)
+PASS C6a        plain nori /mention completes from its own folder
+PASS C6b        plain nori inserts the same way
+PASS R1a        /config hides the native mode option
+PASS R1b        agent confirms the native mode change
+PASS R1d        controller's mode badge does not show the replaced native mode
+FAIL R1e        footer repeats 'Approvals: Ask'
+PASS R1c        later attach shows Ask as current
+PASS R1f        later attach's mode badge does not show the replaced native mode
+PASS R2a        same-ID replacement by Moss
+PASS R2b        controller no longer offers the previous agent's model
+FAIL R2d        later attach by ID opens the replaced session itself (missing /now runs Moss/ in r2-late-attach)
+PASS R2e        list opens the replaced session
+PASS R2f        replaced session (via list) offers no previous-agent models
+FAIL R2c        later attach does not offer the replaced agent's models (found /[0-9]\. harbor/ in r2-late-model)
+PASS B1a        host-confirmed /model change is announced
+PASS B1b        next reply uses the confirmed model
+PASS B2a        agent rejection is shown
+PASS B2b        rejected value is not announced as set
+PASS B2c        picker still shows the confirmed model after a rejection
+PASS B2d        agent still runs the confirmed model
+PASS B5a        /config lists Model with the confirmed value
+PASS B5b        /config leaves out agent and permission mode
+PASS B5c        effort change confirmed
+PASS B5d        next reply uses effort high
+PASS B4a        a later attach (after Alt+T) sees the confirmed model
+PASS B3a        delayed answer does not land in the other session
+PASS B3b        other session's config untouched
+PASS B3c        delayed answer is shown in the session it was made in
+PASS B3d        agent confirms the delayed change
+PASS B3e        terminal attached while the answer was pending sees it
+PASS B6a        watcher's /model is greyed
+PASS B6b        watcher's /config is greyed
+PASS R1a        /config hides the native mode option
+PASS R1b        agent confirms the native mode change
+PASS R1d        controller's mode badge does not show the replaced native mode
+FAIL R1e        footer repeats 'Approvals: Ask'
+PASS R1c        later attach shows Ask as current
+PASS R1f        later attach's mode badge does not show the replaced native mode
+PASS R2a        same-ID replacement by Moss
+PASS R2b        controller no longer offers the previous agent's model
+FAIL R2d        later attach by ID opens the replaced session itself (missing /now runs Moss/ in r2-late-attach)
+FAIL R2c        later attach does not offer the replaced agent's models (found /[0-9]\. harbor/ in r2-late-model)
+PASS B7a        plain nori /model lists the advertised models

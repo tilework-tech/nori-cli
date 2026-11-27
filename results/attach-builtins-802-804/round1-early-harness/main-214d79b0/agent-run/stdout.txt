@@ -1,0 +1,22 @@
+PASS A2a        slash menu lists /agent once
+FAIL A6a        Cedar row shows the host's reason (missing /not installed|cannot|not found/ in a6-picker-cedar)
+FAIL A6b        Enter on Cedar explains the refusal (missing /Cedar cannot start on this host/ in a6-cedar-enter)
+FAIL A6c        picker stays open after the refusal (missing /Choose an agent/ in a6-cedar-enter)
+PASS A6d        refusal starts no session
+FAIL A1a        no lark session on host
+FAIL A1b        Lark answers in the new session (missing /Lark turn 1 on lark-1/ in a1-lark-reply)
+FAIL A3a        ID c8586151-7699-42fc-860a-a3d10c8fdd5c not running lark
+FAIL A3b        session count 1, expected 2
+FAIL A3c        the next prompt reaches Lark, not Kestrel (missing /Lark turn 1/ in a3-reply)
+FAIL A3d        controller footer names the new agent after the in-place change (missing /controlling .* lark .* ready/ in a3-reply)
+FAIL A3e        controller slash menu names the new agent (missing //model .*current: lark/ in a3-controller-slash)
+PASS A5a        watcher keeps the session after the in-place change
+FAIL A5b        watcher sees the new agent's reply (missing /Lark turn 1/ in a5-watcher-after)
+FAIL A5c        watcher's /agent is greyed with the take-control hint (missing //agent .*watching/ in a5-watcher-slash)
+PASS A7a        a later attach opens the in-place-changed session
+FAIL A7b        a later attach replays the new agent's turn (missing /Lark turn 1/ in a7-late-attach)
+FAIL A4a        prompted session: notice names the new agent and Alt+S (missing /Started a new session with Lark/ in a4-beside)
+PASS A4b        previous conversation keeps running
+FAIL A4c        session count 2, expected 4
+FAIL A4d        Alt+S back: the old conversation still answers (missing /Kestrel turn 2/ in a4-back)
+PASS A2b        plain nori /agents opens the agent picker

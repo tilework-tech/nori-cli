@@ -1,0 +1,40 @@
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-SaiY/host-project.
+
+■ Failed to set Model: Failed to set ACP session config option: Kestrel refuses model kestrel-classic
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-SaiY/host-project.
+
+• kestrel option set: Effort=High
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /tmp/abv-SaiY/host-project.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+• This terminal now controls the host.
+
+• kestrel option set: Model=harbor-mini
+
+
+› status
+
+
+• Kestrel turn 4 on kestrel-1: model harbor-mini, effort high, mode None, cwd /tmp/abv-SaiY/host-project.
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach

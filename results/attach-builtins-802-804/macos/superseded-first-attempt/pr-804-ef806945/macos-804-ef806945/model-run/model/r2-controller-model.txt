@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• kestrel option set: Model=harbor-max
+
+• This session now runs Moss.
+
+  4 ready
+
+
+  Select model
+  No model option was advertised for this session
+
+     This agent has no model selector
+     Use /agent to switch between ACP agents
+
+  ↑↓/j/k move  enter select  esc close
+

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+■ /model: not available in nori attach yet
+
+■ /model: not available in nori attach yet
+
+
+› /model/agent
+
+
+• Kestrel read: /model/agent
+
+
+› /model/agent
+
+
+• Kestrel read: /model/agent
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach

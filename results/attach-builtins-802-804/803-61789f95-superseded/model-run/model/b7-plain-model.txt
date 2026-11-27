@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /tmp/abv-x51O/host-project
+  Agent        Kestrel
+
+• Kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+  Model
+  Select a value for this ACP session setting
+
+  ▏› 1. harbor-mini (current)                                                                              ▕
+  ▏                                                                                                        ▕
+     2. harbor-max
+
+     3. kestrel-classic
+
+     4. Use custom model...
+        Enter any model ID
+  ↑↓/j/k move  / search  enter select  esc close
+

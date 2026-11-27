@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• kestrel option set: Model=harbor-max
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-xk87/host-project.
+
+■ Failed to set Model: Failed to set ACP session config option: Kestrel refuses model kestrel-classic
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-xk87/host-project.
+
+
+  Session config
+  Select an ACP session setting to change
+
+  ▏› 1. Model (harbor-max)                                                                                 ▕
+     2. Effort (Low)
+
+  ↑↓/j/k move  enter select  esc close
+

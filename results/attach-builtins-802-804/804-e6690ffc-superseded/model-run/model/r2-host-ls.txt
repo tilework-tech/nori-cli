@@ -1,0 +1,5 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+16833a33-0ae3-4afd-b272-09ec81a2ac92  kestrel           ready                 2m  /tmp/abv-HPna/host-project  status
+b7bc875c-6037-4a06-9d30-40675c5c0e2c  lark              ready                 2m  /tmp/abv-HPna/host-project  status
+2b4567a2-2610-448f-a342-fca7bee43887  codex             ready                 1m  /tmp/abv-HPna/host-project  status
+1a581d4d-c8ab-4d30-8ab6-4859289173ea  moss              ready                13s  /tmp/abv-HPna/host-project  -

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0mCodex options: Mode=[1m[38;5;6mworkspace-write[0m, Model=[1m[38;5;6mharbor-mini[0m, Effort=[1m[38;5;6mLow[0;2m (/config to change)[0m
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mOsprey turn 1 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /private/tmp/abv-0XIS/host-
+  project.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/config/model[49m
+
+
+[2m• [0mOsprey read: /config/model
+
+[38;5;1m■ /model: not available in nori attach yet[39m
+
+[1mSessions 2 · 2 ready[0;2m  tab: waiting only · / search[0m
+
+[1mAll[0m  [38;5;8mwaiting on you[39m
+
+ [1m [0m [1mSession[0m                                                          [1mAgent[0m         [1mStatus[0m
+[38;5;2m[48;2;43;43;43m▏›[39m ○ status (on screen)                                             [38;5;15mcodex[39m         [38;5;2mready[39m                      [38;5;2m▕
+▏[39m  [38;5;8m  host-project · Osprey read: /config/model[39m                      [38;5;8mharbor-mini[39m   [38;5;8m6s ago[39m                     [38;5;2m▕
+[39m[48;2;29;29;29m   ○ /model/agent                                                   kestrel       [38;5;2mready[39m
+[49m   [38;5;8m  host-project · Kestrel read: /model/agent[39m                      [38;5;8mharbor-mini[39m   [38;5;8m27s ago[39m
+
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose[39m
+

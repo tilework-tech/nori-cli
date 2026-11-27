@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0mStarted a new session with Lark. The previous conversation keeps running; Alt+S switches to it.
+
+[2m• [0mlark options: Model=[1m[38;5;6mharbor-mini[0m, Effort=[1m[38;5;6mLow[0;2m (/config to change)[0m
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mLark turn 1 on lark-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-fw26/host-project.
+
+[1mSessions 4 · 4 ready[0;2m  tab: waiting only · / search[0m
+
+[1mAll[0m  [38;5;8mwaiting on you[39m
+
+ [1m [0m [1mSession[0m                                                          [1mAgent[0m         [1mStatus[0m
+[48;2;29;29;29m   ○ status                                                         lark          [38;5;2mready[39m
+[49m   [38;5;8m  host-project · Lark turn 1 on lark-1: model harbor-mini, eff…[39m  [38;5;8mharbor-mini[39m   [38;5;8m35s ago[39m
+[48;2;29;29;29m   ○ status                                                         lark          [38;5;2mready[39m
+[49m   [38;5;8m  host-project · Lark read: tidepool marker[39m                      [38;5;8mharbor-mini[39m   [38;5;8m20s ago[39m
+[48;2;29;29;29m   ○ status                                                         kestrel       [38;5;2mready[39m
+[49m   [38;5;8m  host-project · Kestrel turn 1 on kestrel-1: model harbor-min…[39m  [38;5;8mharbor-mini[39m   [38;5;8m5s ago[39m
+[38;5;2m[48;2;43;43;43m▏›[39m ○ status (on screen)                                             lark          [38;5;2mready[39m                      [38;5;2m▕
+▏[39m  [38;5;8m  host-project · Lark turn 1 on lark-1: model harbor-mini, eff…[39m  [38;5;8mharbor-mini[39m   [38;5;8m0s ago[39m                     [38;5;2m▕
+[39m[49m
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose[39m
+

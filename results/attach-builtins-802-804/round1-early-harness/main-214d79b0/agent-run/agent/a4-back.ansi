@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mkestrel options: Model=[1m[38;5;6mharbor-mini[0m[39m[49m, Effort=[1m[38;5;6mLow[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 1 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-lsAs/host-project.
+
+[38;5;1m■ /agent: not available in nori attach yet
+[39m
+[38;5;1m■ /agent: not available in nori attach yet[39m
+
+
+[1;2m› [0m[39m[49m/agentstatus
+
+
+[2m• [0m[39m[49mKestrel read: /agentstatus
+
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-lsAs/host-project.
+
+  [2m2 ready[0m[39m[49m
+
+
+[1m〉[0m[39m[49m
+
+  [1m/[0;2m[39m[49m commands · [0;1m[39m[49m@[0;2m[39m[49m files · [0m[38;5;2m[49mcontrolling[2m[39m · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach

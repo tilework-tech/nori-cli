@@ -1,0 +1,40 @@
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/modelstatus[49m
+
+
+[2m• [0mKestrel read: /modelstatus
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/model/model[49m
+
+
+[2m• [0mKestrel read: /model/model
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-VpYV/host-
+  project.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/configstatus[49m
+
+
+[2m• [0mKestrel read: /configstatus
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43m/modelstatus[49m
+
+
+[2m• [0mKestrel read: /modelstatus
+
+[2m• [0mThis terminal now controls the host.
+
+[38;5;1m■ /model: not available in nori attach yet[39m
+
+  [2m2 ready[0m
+
+[48;2;43;43;43m
+[38;5;2m/[39m model
+
+[49m  [2m/[1mmodel[0;2m  not available in nori attach yet[0m

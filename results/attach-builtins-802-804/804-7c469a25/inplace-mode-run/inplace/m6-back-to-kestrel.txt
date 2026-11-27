@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• This session now runs Osprey.
+
+• This session now runs Kestrel.
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · controlling · host-project · codex · ready · Approvals: Agent · ctrl+d detach

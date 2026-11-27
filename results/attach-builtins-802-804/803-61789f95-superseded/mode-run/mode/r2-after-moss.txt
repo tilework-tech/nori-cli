@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• kestrel option set: Model=harbor-max
+
+• This session now runs Moss.
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · ? help · controlling · host-project · moss · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,1 @@
+22:01:31 prompt kestrel-1 'harbor-buoy.png' blocks=['text']

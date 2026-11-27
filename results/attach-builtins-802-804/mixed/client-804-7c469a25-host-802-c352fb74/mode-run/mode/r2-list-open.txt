@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• moss options: Model=harbor-mini, Effort=Low (/config to change)
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · ? help · controlling · host-project · moss · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+[2m• [0m[39m[49mkestrel options: Model=[1m[38;5;6mharbor-mini[0m[39m[49m, Effort=[1m[38;5;6mLow[0;2m[39m[49m (/config to change)
+[0m[39m[49m
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-15In/host-project.
+
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-15In/host-project.
+
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /tmp/abv-15In/host-project.
+
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 4 on kestrel-1: model harbor-mini, effort high, mode None, cwd /tmp/abv-15In/host-project.
+
+  [2m2 ready[0m[39m[49m
+
+
+[38;5;2m/[39m con
+
+  [2m/[1mcon[0;2m[39m[49mfig   watching · Alt+T to take control[0m[39m[49m
+  /[1mcon[0m[39m[49mtext  [2mvisualize context usage and inspect local instructions[0m[39m[49m

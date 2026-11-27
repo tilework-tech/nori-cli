@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=workspace-write, Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Osprey turn 1 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /tmp/abv-SaiY/host-project.
+
+  3 ready
+
+
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+  ▏› 1. Ask (current)                                                                                      ▕
+  ▏     Ask before every edit and command.                                                                 ▕
+     2. Agent
+        The agent asks when it judges it needs to.
+     3. Approve all
+        Nori approves every permission request.
+  ↑↓/j/k move  enter select  esc close
+

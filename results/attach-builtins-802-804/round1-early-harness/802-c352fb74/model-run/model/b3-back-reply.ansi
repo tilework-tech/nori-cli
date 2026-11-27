@@ -1,0 +1,40 @@
+[2m• [0m[39m[49mKestrel read: /model/model
+
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-LWh9/host-project.
+
+[38;5;1m■ /config: not available in nori attach yet[39m
+
+[38;5;1m■ /config: not available in nori attach yet[39m
+
+[38;5;1m■ /config: not available in nori attach yet[39m
+
+
+[1;2m› [0m[39m[49m/configstatus
+
+
+[2m• [0m[39m[49mKestrel read: /configstatus
+
+[2m• [0m[39m[49mAnother terminal took control. Watching; Alt+T takes it back.
+
+[2m• [0m[39m[49mThis terminal now controls the host.
+
+[38;5;1m■ /model: not available in nori attach yet[39m
+
+[38;5;1m■ /model: not available in nori attach yet[39m
+
+
+[1;2m› [0m[39m[49m/modelstatus
+
+
+[2m• [0m[39m[49mKestrel read: /modelstatus
+
+  [2m2 ready[0m[39m[49m
+
+
+[1m〉[0m[39m[49m
+
+  [1m/[0;2m[39m[49m commands · [0;1m[39m[49m@[0;2m[39m[49m files · [0m[38;5;2m[49mcontrolling[2m[39m · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach[0m[39m[49m

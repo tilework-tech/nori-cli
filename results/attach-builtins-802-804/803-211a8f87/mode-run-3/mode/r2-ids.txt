@@ -1,0 +1,4 @@
+K3=6d4bb7b8-de3b-46a8-bfb4-e76c3cd2b440 O1=8e6f8962-bb63-4269-832f-4765cdb60ce5
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+8e6f8962-bb63-4269-832f-4765cdb60ce5  codex             ready                 1m  /tmp/abv-P5Qf/host-project  status
+6d4bb7b8-de3b-46a8-bfb4-e76c3cd2b440  moss              ready                18s  /tmp/abv-P5Qf/host-project  -

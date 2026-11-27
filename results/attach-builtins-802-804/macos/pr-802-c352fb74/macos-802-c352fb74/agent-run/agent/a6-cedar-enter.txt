@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+■ Cedar cannot start on this host: Adapter not installed. ensure 'cedar-adapter-not-installed' is in your PATH
+
+
+  Choose an agent
+  Starts a session with it on this host
+
+     7. Hermes Agent
+        Adapter not installed. install Hermes Agent with its ACP extra on PATH and run `hermes acp --check…
+     8. Pi
+        Installed
+     9. Kestrel
+        Installed
+        Lark
+        Installed
+        Moss
+        Installed
+  ▏›    Cedar                                                                                              ▕
+  ▏     Adapter not installed. ensure 'cedar-adapter-not-installed' is in your PATH                        ▕
+  ↑↓/j/k move  enter select  esc close
+

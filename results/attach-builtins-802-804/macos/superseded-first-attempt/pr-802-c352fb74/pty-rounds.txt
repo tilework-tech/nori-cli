@@ -1,0 +1,14 @@
+round 1: test a_host_with_no_sessions_lists_its_agents_and_starts_the_chosen_one ... FAILED
+round 1: test a_prompted_session_keeps_its_conversation_and_the_new_agent_starts_beside_it ... FAILED
+round 1: test a_watcher_keeps_a_session_whose_agent_changes_in_place ... FAILED
+round 1: test a_terminal_attaching_after_an_in_place_change_opens_the_running_session ... FAILED
+round 1: test an_agent_the_host_cannot_start_starts_nothing ... FAILED
+round 1: test an_unprompted_session_changes_agent_in_place ... FAILED
+round 1: test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+round 2: test a_terminal_attaching_after_an_in_place_change_opens_the_running_session ... FAILED
+round 2: test a_watcher_keeps_a_session_whose_agent_changes_in_place ... FAILED
+round 2: test a_prompted_session_keeps_its_conversation_and_the_new_agent_starts_beside_it ... FAILED
+round 2: test a_host_with_no_sessions_lists_its_agents_and_starts_the_chosen_one ... FAILED
+round 2: test an_agent_the_host_cannot_start_starts_nothing ... FAILED
+round 2: test an_unprompted_session_changes_agent_in_place ... FAILED
+round 2: test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

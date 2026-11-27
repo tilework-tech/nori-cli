@@ -1,0 +1,3 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+b4d1df23-5bfc-4280-b24b-31ac19023fb0  codex             ready                 1m  /tmp/abv-q5ot/host-project  status
+809c85a3-1090-4f28-ad79-7f03ed05da94  moss              ready                13s  /tmp/abv-q5ot/host-project  -

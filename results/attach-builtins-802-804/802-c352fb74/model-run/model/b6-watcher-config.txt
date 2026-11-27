@@ -1,0 +1,40 @@
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› /modelstatus
+
+
+• Kestrel read: /modelstatus
+
+
+› /model/model
+
+
+• Kestrel read: /model/model
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-hYML/host-project.
+
+
+› /configstatus
+
+
+• Kestrel read: /configstatus
+
+
+› /modelstatus
+
+
+• Kestrel read: /modelstatus
+
+  2 ready
+
+
+/ con
+
+  /config   not available in nori attach yet
+  /context  visualize context usage and inspect local instructions

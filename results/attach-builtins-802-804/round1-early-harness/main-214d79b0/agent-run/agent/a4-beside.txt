@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-lsAs/host-project.
+
+■ /agent: not available in nori attach yet
+
+■ /agent: not available in nori attach yet
+
+  2 ready
+
+
+/ agent
+
+  /agent  not available in nori attach yet

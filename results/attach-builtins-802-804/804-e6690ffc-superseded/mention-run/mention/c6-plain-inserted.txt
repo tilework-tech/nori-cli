@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /tmp/abv-Kym0/host-project
+  Agent        Kestrel
+
+• Kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+〉harbor-chart-on-host.md
+
+  Enter send · Ctrl+J newline
+
+
+
+
+
+
+
+
+
+

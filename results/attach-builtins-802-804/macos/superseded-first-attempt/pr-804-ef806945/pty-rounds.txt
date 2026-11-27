@@ -1,0 +1,38 @@
+round 1: test a_watcher_keeps_a_session_whose_agent_changes_in_place ... FAILED
+round 1: test a_prompted_session_keeps_its_conversation_and_the_new_agent_starts_beside_it ... FAILED
+round 1: test a_host_with_no_sessions_lists_its_agents_and_starts_the_chosen_one ... FAILED
+round 1: test a_terminal_attaching_after_an_in_place_change_opens_the_running_session ... FAILED
+round 1: test an_agent_the_host_cannot_start_starts_nothing ... FAILED
+round 1: test an_unprompted_session_changes_agent_in_place ... FAILED
+round 1: test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+round 1: test a_terminal_that_attaches_later_sees_the_confirmed_model ... FAILED
+round 1: test a_watcher_adopts_the_controllers_confirmed_model ... FAILED
+round 1: test a_model_the_host_confirms_answers_the_next_prompt ... FAILED
+round 1: test a_watcher_cannot_change_the_configuration ... FAILED
+round 1: test an_agent_replaced_by_one_without_options_leaves_no_model_behind ... FAILED
+round 1: test config_lists_the_agents_own_options_and_changes_one ... FAILED
+round 1: test each_session_keeps_its_own_configuration_across_switches ... FAILED
+round 1: test attach_offers_the_models_plain_nori_offers_for_the_same_agent ... FAILED
+round 1: test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+round 1: test mention_in_a_session_offers_its_folder_on_the_host ... FAILED
+round 1: test mention_with_no_session_offers_the_hosts_files ... FAILED
+round 1: test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+round 2: test a_host_with_no_sessions_lists_its_agents_and_starts_the_chosen_one ... FAILED
+round 2: test a_watcher_keeps_a_session_whose_agent_changes_in_place ... FAILED
+round 2: test a_terminal_attaching_after_an_in_place_change_opens_the_running_session ... FAILED
+round 2: test a_prompted_session_keeps_its_conversation_and_the_new_agent_starts_beside_it ... FAILED
+round 2: test an_unprompted_session_changes_agent_in_place ... FAILED
+round 2: test an_agent_the_host_cannot_start_starts_nothing ... FAILED
+round 2: test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+round 2: test a_watcher_cannot_change_the_configuration ... FAILED
+round 2: test a_model_the_host_confirms_answers_the_next_prompt ... FAILED
+round 2: test a_terminal_that_attaches_later_sees_the_confirmed_model ... FAILED
+round 2: test a_watcher_adopts_the_controllers_confirmed_model ... FAILED
+round 2: test attach_offers_the_models_plain_nori_offers_for_the_same_agent ... FAILED
+round 2: test an_agent_replaced_by_one_without_options_leaves_no_model_behind ... FAILED
+round 2: test config_lists_the_agents_own_options_and_changes_one ... FAILED
+round 2: test each_session_keeps_its_own_configuration_across_switches ... FAILED
+round 2: test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+round 2: test mention_in_a_session_offers_its_folder_on_the_host ... FAILED
+round 2: test mention_with_no_session_offers_the_hosts_files ... FAILED
+round 2: test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

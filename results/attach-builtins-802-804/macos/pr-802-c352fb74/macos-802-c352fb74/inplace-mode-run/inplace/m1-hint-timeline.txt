@@ -1,0 +1,25 @@
+11.11s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+11.63s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+12.15s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+12.68s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+13.20s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+13.72s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+14.24s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+14.77s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+15.29s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+15.82s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+16.35s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+16.87s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+17.40s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+17.92s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+18.45s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+18.97s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+19.50s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+20.03s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+20.56s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+21.09s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+21.61s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+22.15s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+22.68s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+23.19s  badge=[ workspace-write ]  hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach
+after prompt: badge=[ workspace-write ] hint=  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach

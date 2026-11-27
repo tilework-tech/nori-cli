@@ -1,0 +1,40 @@
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /private/tmp/abv-O4hj/host-
+  project.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /private/tmp/abv-O4hj/host-
+  project.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /private/tmp/abv-O4hj/host-
+  project.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 4 on kestrel-1: model harbor-mini, effort high, mode None, cwd /private/tmp/abv-O4hj/host-
+  project.
+
+  [2m4 ready[0m
+
+
+  [1mModel[0m
+  [38;5;8mSelect a value for this ACP session setting[39m
+
+  [38;5;2m[48;2;43;43;43m▏›[39m 1. harbor-mini (current)                                                                              [38;5;2m▕[39m[49m
+  [48;2;36;36;36m   2. harbor-max                                                                                          [49m
+  [48;2;29;29;29m   3. kestrel-classic                                                                                     [49m
+  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2m/[39m [38;5;8msearch  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose[39m
+

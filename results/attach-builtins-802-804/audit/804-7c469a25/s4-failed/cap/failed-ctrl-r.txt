@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+■ Failed to start ACP session: Could not find the Antigravity CLI. Suggested fix: install Antigravity from
+https://antigravity.google/cli and add `agy` to PATH
+
+■ session 64c603b9-f631-4e87-bb7a-d50d8c83d7b1 has no transcript to resume from
+
+
+〉
+
+  / commands · controlling · app · gemini · failed · Approvals: Agent · ctrl+d detach   ⎇ nori/attach-builtins-accept...

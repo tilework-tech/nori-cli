@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /tmp/abv-Aq1k/host-project
+  Agent        Kestrel
+
+• Kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+  Select agent
+  Creates new conversation with selected agent (history not preserved)
+
+     6. Grok Build
+        xAI
+     7. OpenCode
+        Configured in OpenCode
+     8. Cursor Agent
+        Cursor
+     9. Hermes Agent
+        Nous Research
+        Pi
+        Earendil
+  ▏›    Kestrel (current)                                                                                  ▕
+  ▏     kestrel                                                                                            ▕
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› /agentstatus
+
+
+• Kestrel read: /agentstatus
+
+
+〉
+
+  watching · read-only · host-project · kestrel · ready · Approvals: Agent · alt+t take control · ctrl+d detac

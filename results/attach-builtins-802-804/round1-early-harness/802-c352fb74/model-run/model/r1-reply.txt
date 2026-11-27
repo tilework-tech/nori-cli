@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=workspace-write, Model=harbor-mini, Effort=Low (/config to change)
+
+■ /config: not available in nori attach yet
+
+
+› /config/approvals
+
+
+• Osprey read: /config/approvals
+
+
+› /config/approvals
+
+
+• Osprey read: /config/approvals
+
+
+› status
+
+
+• Osprey turn 3 on osprey-1: model harbor-mini, effort low, mode workspace-write, cwd /tmp/abv-LWh9/host-
+  project.
+
+  3 ready
+
+                                                                                           [ workspace-write ]
+〉
+
+  / commands · @ files · controlling · host-project · codex · ready · Approvals: Agent · ctrl+d detach

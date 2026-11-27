@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• moss options: Model=harbor-mini, Effort=Low (/config to change)
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                          Agent         Status
+   ○ status                                                         codex         ready
+     host-project · Osprey turn 1 on osprey-1: model harbor-mini,…  harbor-mini   17s ago
+▏› ○ new session (on screen)                                        moss          ready                      ▕
+▏    no reply yet                                                                 17s ago                    ▕
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

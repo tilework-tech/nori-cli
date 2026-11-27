@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-HPna/host-project.
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-HPna/host-project.
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /tmp/abv-HPna/host-project.
+
+
+› status
+
+
+• Kestrel turn 4 on kestrel-1: model harbor-mini, effort high, mode None, cwd /tmp/abv-HPna/host-project.
+
+  4 ready
+
+
+/ con
+
+  /config   configure ACP agent settings (if exposed by the agent)
+  /context  visualize context usage and inspect local instructions

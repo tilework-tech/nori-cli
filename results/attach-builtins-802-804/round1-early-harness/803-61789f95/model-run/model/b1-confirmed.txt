@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• kestrel option set: Model=harbor-max
+
+
+  Session config
+  Select an ACP session setting to change
+
+  ▏› 1. Model (harbor-max)                                                                                 ▕
+     2. Effort (Low)
+
+  ↑↓/j/k move  enter select  esc close
+

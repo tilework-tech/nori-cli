@@ -1,0 +1,40 @@
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+■ /model: not available in nori attach yet
+
+■ /model: not available in nori attach yet
+
+
+› /modelstatus
+
+
+• Kestrel read: /modelstatus
+
+■ /model: not available in nori attach yet
+
+■ /model: not available in nori attach yet
+
+
+› /model/model
+
+
+• Kestrel read: /model/model
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-Yqxw/host-
+  project.
+
+■ /config: not available in nori attach yet
+
+■ /config: not available in nori attach yet
+
+■ /config: not available in nori attach yet
+
+
+/ config
+
+  /config  not available in nori attach yet

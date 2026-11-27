@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Started a new session with Lark. The previous conversation keeps running; Alt+S switches to it.
+
+• lark options: Model=harbor-mini, Effort=Low (/config to change)
+
+  4 ready
+
+
+〉
+
+  / commands · @ files · ? help · controlling · host-project · lark · ready · Approvals: Agent · ctrl+d detach

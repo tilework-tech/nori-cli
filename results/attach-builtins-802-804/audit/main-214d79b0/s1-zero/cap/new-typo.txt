@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+■ Failed to start ACP session: Unknown ACP agent: codx
+
+  1 failed · 2 ready
+
+
+〉
+
+  / commands · controlling · app · codx · failed · Approvals: Agent · ctrl+d detach     ⎇ nori/attach-builtins-accept...

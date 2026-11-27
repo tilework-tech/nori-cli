@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› harbor-chart-on-host.md
+
+
+• Kestrel read: harbor-chart-on-host.md
+
+
+› harbor-buoy.png
+
+
+• Kestrel read: harbor-buoy.png
+
+  2 ready
+
+
+〉@harbor-chart
+
+  harbor-chart-on-host.md

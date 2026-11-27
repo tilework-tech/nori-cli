@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› /agentstatus
+
+
+• Kestrel read: /agentstatus
+
+
+› tidepool marker
+
+
+• Kestrel read: tidepool marker
+
+
+/ age
+
+  /agent  not available in nori attach yet

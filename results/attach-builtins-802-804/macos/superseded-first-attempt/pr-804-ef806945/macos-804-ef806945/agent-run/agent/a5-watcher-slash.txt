@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• lark options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Lark turn 1 on lark-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-Okz4/host-project.
+
+  2 ready
+
+
+/ age
+
+  /agent  watching · Alt+T to take control

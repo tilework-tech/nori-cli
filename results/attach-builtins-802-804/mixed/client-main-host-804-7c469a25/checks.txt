@@ -1,0 +1,2 @@
+PASS G1         prompt is delivered across versions
+PASS G2         no-session @ never lists the attaching folder

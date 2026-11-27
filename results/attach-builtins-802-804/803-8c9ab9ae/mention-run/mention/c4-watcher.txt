@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› /mentionharbor-chart
+
+
+• Kestrel read: /mentionharbor-chart
+
+
+› /mentionharbor-buoy
+
+
+• Kestrel read: /mentionharbor-buoy
+
+■ /mention: not available on this host yet
+
+  2 ready
+
+
+/ mentionharbor-chart
+
+  no matches

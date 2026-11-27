@@ -1,0 +1,3 @@
+ID                                    AGENT             STATUS               AGE  CWD                                                                                                                          TITLE
+46144998-5d70-48c1-b8d9-fc89bdda3c43  claude-code       ready                45s  /home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/main-214d79b0/s5-approve/roots/alpha/app  perm boat
+04467ea6-4a06-4a0c-8df1-089dc9aac089  claude-code       working              16s  /home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/main-214d79b0/s5-approve/roots/alpha/app  relay 80 reef

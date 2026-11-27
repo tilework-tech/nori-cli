@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-sacq/host-project.
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-sacq/host-project.
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /tmp/abv-sacq/host-project.
+
+
+〉
+
+  watching · read-only · host-project · kestrel · ready · Approvals: Agent · alt+t take control · ctrl+d detac

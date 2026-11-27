@@ -1,0 +1,40 @@
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-PsvB/host-project.
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /tmp/abv-PsvB/host-project.
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /tmp/abv-PsvB/host-project.
+
+
+› status
+
+
+• Kestrel turn 4 on kestrel-1: model harbor-mini, effort high, mode None, cwd /tmp/abv-PsvB/host-project.
+
+• This terminal now controls the host.
+
+  2 ready
+
+
+  Model
+  Select a value for this ACP session setting
+
+  ▏› 1. harbor-mini (current)                                                                              ▕
+     2. harbor-max
+     3. kestrel-classic
+  ↑↓/j/k move  / search  enter select  esc close
+

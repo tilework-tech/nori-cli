@@ -1,0 +1,5 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+d9387b76-7b2c-4b21-beb5-d6d3803422f4  kestrel           ready                 2m  /tmp/abv-SaiY/host-project  status
+d5143c41-ddbc-4a22-b556-a87006e38ef7  lark              ready                 2m  /tmp/abv-SaiY/host-project  status
+e9eb76b9-48c4-4018-959f-7a2c78f248ee  codex             ready                 1m  /tmp/abv-SaiY/host-project  status
+0c488580-bff1-4971-bcb4-830e55471832  moss              ready                13s  /tmp/abv-SaiY/host-project  -

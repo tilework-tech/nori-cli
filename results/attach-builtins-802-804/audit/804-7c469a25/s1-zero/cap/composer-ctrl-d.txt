@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+
+  Choose an agent
+  Starts a session with it on this host
+
+  ▏› 1. Mock ACP                                                                                                     ▕
+  ▏     Adapter not installed. Mock agent - no installation required                                                 ▕
+     2. Mock ACP Alt
+        Adapter not installed. Mock agent - no installation required
+     3. Lantern Claude
+        Installed
+     4. Lantern Codex
+        Installed
+     5. Antigravity
+        Adapter not installed. install Antigravity from https://antigravity.google/cli and add `agy` to PATH
+     6. Grok Build
+        Adapter not installed. install npm and make `npx` available on PATH
+  ↑↓/j/k move  enter select  esc close
+

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0mkestrel options: Model=[1m[38;5;6mharbor-mini[0m, Effort=[1m[38;5;6mLow[0;2m (/config to change)[0m
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mKestrel turn 1 on kestrel-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-Okz4/host-
+  project.
+
+  [2m3 ready[0m
+
+
+  [1mChoose an agent[0m
+  [38;5;8mStarts a new session with it; this conversation keeps running[39m
+
+     5. OpenCode
+        [38;5;8mAdapter not[39m [38;5;8minstalled.[39m [38;5;8minstall[39m [38;5;8mOpenCode[39m [38;5;8mand[39m [38;5;8madd[39m [38;5;8m`opencode`[39m [38;5;8mto[39m [38;5;8mPATH[39m
+     6. Cursor Agent
+        [38;5;8mAdapter not installed. install the Cursor CLI from https://cursor.com/docs/cli/installation[39m [38;5;8mand[39m [38;5;8mad…[39m
+     7. Hermes Agent
+        [38;5;8mAdapter not installed. install Hermes Agent with its ACP extra on PATH and run `hermes acp --check…[39m
+     8. Pi
+        [38;5;8mInstalled[39m
+     9. Kestrel (current)
+        [38;5;8mInstalled[39m
+  [38;5;2m[48;2;43;43;43m▏›[39m    Lark                                                                                               [38;5;2m▕[39m[49m
+  [38;5;2m[48;2;43;43;43m▏[39m     [38;5;8mInstalled                                                                                          [38;5;2m▕[39m[49m
+  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose[39m
+

@@ -1,0 +1,7 @@
+PASS G1         prompt is delivered across versions
+FAIL G2         no-session @ never lists the attaching folder (found /harbor-chart-on-client.md/ in g-at-no-session)
+PASS G3-agent   /agent greyed for an older host
+FAIL G3-model   /model greyed for an older host (missing //model .*not available on this host yet/ in g-slash-mod)
+FAIL G3-config  /config greyed for an older host (missing //config .*not available on this host yet/ in g-slash-con)
+PASS G3-mention /mention greyed for an older host
+PASS G4         /agents is not sent as a prompt

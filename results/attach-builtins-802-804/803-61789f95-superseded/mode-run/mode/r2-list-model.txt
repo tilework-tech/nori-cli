@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• moss options: Model=harbor-mini, Effort=Low (/config to change)
+
+  2 ready
+
+
+  Model
+  Select a value for this ACP session setting
+
+     1. harbor-mini
+  ▏› 2. harbor-max (current)                                                                               ▕
+     3. kestrel-classic
+  ↑↓/j/k move  / search  enter select  esc close
+

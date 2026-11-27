@@ -1,0 +1,47 @@
+agent = "gemini"
+
+[projects."/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/roots/alpha/app"]
+trust_level = "trusted"
+[projects."/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/roots/beta/app"]
+trust_level = "trusted"
+[projects."/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/roots/laptop/app"]
+trust_level = "trusted"
+
+[[agents]]
+name = "Lantern Claude"
+slug = "claude-code"
+[agents.distribution.local]
+command = "/usr/bin/python3"
+args = ["-I", "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/bin/lantern_adapter.py"]
+[agents.distribution.local.env]
+LANTERN_NAME = "claude-code"
+LANTERN_LEDGER = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/ledger.jsonl"
+LANTERN_MODES = "auto,default,acceptEdits,plan"
+LANTERN_SAVED = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/saved-sessions.json"
+LANTERN_CONTROL = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/control"
+
+[[agents]]
+name = "Lantern Codex"
+slug = "codex"
+[agents.distribution.local]
+command = "/usr/bin/python3"
+args = ["-I", "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/bin/lantern_adapter.py"]
+[agents.distribution.local.env]
+LANTERN_NAME = "codex"
+LANTERN_LEDGER = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/ledger.jsonl"
+LANTERN_MODES = "agent,read-only,workspace-write,agent-full-access"
+LANTERN_SAVED = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/saved-sessions.json"
+LANTERN_CONTROL = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/control"
+
+[[agents]]
+name = "Lantern Opencode"
+slug = "opencode"
+[agents.distribution.local]
+command = "/usr/bin/python3"
+args = ["-I", "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/bin/lantern_adapter.py"]
+[agents.distribution.local.env]
+LANTERN_NAME = "opencode"
+LANTERN_LEDGER = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/ledger.jsonl"
+LANTERN_MODES = "build,plan"
+LANTERN_SAVED = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/saved-sessions.json"
+LANTERN_CONTROL = "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/control"

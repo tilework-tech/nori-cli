@@ -1,0 +1,5 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+fe14322d-3670-4e3e-8d61-25998af21572  kestrel           ready                 4m  /tmp/abv-hYML/host-project  /modelstatus
+be1e5277-17d1-4924-ab82-d3c671acfe91  lark              ready                 2m  /tmp/abv-hYML/host-project  status
+c1834690-aca1-467f-832c-ad02e339ddd7  codex             ready                 1m  /tmp/abv-hYML/host-project  /config/approvals
+565debb1-6550-4ac0-b24d-d4c9a58868a6  kestrel           ready                35s  /tmp/abv-hYML/host-project  /model/agent

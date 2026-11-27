@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=workspace-write, Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Osprey turn 1 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /tmp/abv-audO/host-project.
+
+
+› /config/model
+
+
+• Osprey read: /config/model
+
+■ /model: not available in nori attach yet
+
+  2 ready
+
+                                                                                           [ workspace-write ]
+/ model
+
+  /model  not available in nori attach yet

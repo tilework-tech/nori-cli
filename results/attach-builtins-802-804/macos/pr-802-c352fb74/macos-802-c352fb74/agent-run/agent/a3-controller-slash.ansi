@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0mkestrel options: Model=[1m[38;5;6mharbor-mini[0m, Effort=[1m[38;5;6mLow[0;2m (/config to change)[0m
+
+[2m• [0mThis session now runs Lark.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mstatus[49m
+
+
+[2m• [0mLark turn 1 on lark-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-fw26/host-project.
+
+
+[1;2m[48;2;43;43;43m› [0m[48;2;43;43;43mtidepool marker[49m
+
+
+[2m• [0mLark read: tidepool marker
+
+  [2m2 ready[0m
+
+[48;2;43;43;43m
+[38;5;2m/[39m mod
+
+[49m  [2m/[1mmod[0;2mel  not available in nori attach yet[0m

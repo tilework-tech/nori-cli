@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• lark options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Lark turn 1 on lark-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-E1E3/host-project.
+
+
+〉
+
+  / commands · @ files · ? help · controlling · host-project · lark · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+
+  Choose an agent
+  Starts a session with it on this host
+
+  ▏› 1. Mock ACP                                                                                           ▕
+  ▏     Adapter not installed. Mock agent - no installation required                                       ▕
+     2. Mock ACP Alt
+        Adapter not installed. Mock agent - no installation required
+     3. Claude Code
+        Installed
+     4. Osprey
+        Installed
+     5. Antigravity
+        Installed
+     6. Grok Build
+        Installed
+  ↑↓/j/k move  enter select  esc close
+

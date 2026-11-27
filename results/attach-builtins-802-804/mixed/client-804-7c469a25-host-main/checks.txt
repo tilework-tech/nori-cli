@@ -1,0 +1,7 @@
+PASS G1         prompt is delivered across versions
+PASS G2         no-session @ never lists the attaching folder
+FAIL G3-agent   /agent greyed for an older host (missing //agent .*not available on this host yet/ in g-slash-age)
+FAIL G3-model   /model greyed for an older host (missing //model .*not available on this host yet/ in g-slash-mod)
+FAIL G3-config  /config greyed for an older host (missing //config .*not available on this host yet/ in g-slash-con)
+FAIL G3-mention /mention greyed for an older host (missing //mention .*not available on this host yet/ in g-slash-men)
+PASS G4         /agents is not sent as a prompt

@@ -1,0 +1,29 @@
+2026-11-27T23:07:38.727364Z DEBUG tungstenite::handshake::client: Client handshake done.
+2026-11-27T23:07:38.728854Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:07:38.729984Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:07:38.732662Z DEBUG tokio_tungstenite: websocket start_send error: Trying to work with closed connection
+2026-11-27T23:07:38.732757Z DEBUG nori_acp_host::remote::host_wire: managed host connection ended error=WebSocket protocol error: Connection reset without closing handshake
+2026-11-27T23:07:42.901686Z DEBUG tungstenite::handshake::client: Client handshake done.
+2026-11-27T23:07:42.902572Z DEBUG os_info::imp::lsb_release: lsb_release command failed with Os { code: 2, kind: NotFound, message: "No such file or directory" }
+2026-11-27T23:07:42.944364Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:07:42.944483Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:07:47.776200Z DEBUG nori_acp_host::connection::acp_connection: Spawning ACP agent: agy ["acp", "--disable-telemetry"] in /home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/804-7c469a25/s4-failed/roots/alpha/app
+2026-11-27T23:07:47.777308Z ERROR nori_harness::runtime: Failed to start ACP session: Could not find the Antigravity CLI. Suggested fix: install Antigravity from https://antigravity.google/cli and add `agy` to PATH
+2026-11-27T23:07:52.028255Z DEBUG tokio_tungstenite: websocket start_send error: Trying to work with closed connection
+2026-11-27T23:07:52.028438Z DEBUG nori_acp_host::remote::host_wire: managed host connection ended error=WebSocket protocol error: Connection reset without closing handshake
+2026-11-27T23:07:54.446584Z DEBUG tungstenite::handshake::client: Client handshake done.
+2026-11-27T23:07:54.447595Z DEBUG os_info::imp::lsb_release: lsb_release command failed with Os { code: 2, kind: NotFound, message: "No such file or directory" }
+2026-11-27T23:07:54.491105Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:07:54.491338Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:07:58.695509Z DEBUG nori_host_runtime::host::acp: host ACP request client=2 method=session/close
+2026-11-27T23:07:59.947897Z DEBUG nori_host_runtime::host::acp: host ACP request client=2 method=session/close
+2026-11-27T23:08:01.202437Z DEBUG nori_host_runtime::host::acp: host ACP request client=2 method=session/close
+2026-11-27T23:08:02.455916Z DEBUG nori_host_runtime::host::acp: host ACP request client=2 method=session/close
+2026-11-27T23:08:03.710250Z DEBUG nori_host_runtime::host::acp: host ACP request client=2 method=session/close
+2026-11-27T23:08:08.481549Z DEBUG tokio_tungstenite: websocket start_send error: Trying to work with closed connection
+2026-11-27T23:08:08.481735Z DEBUG nori_acp_host::remote::host_wire: managed host connection ended error=WebSocket protocol error: Connection reset without closing handshake
+2026-11-27T23:08:10.748349Z DEBUG tungstenite::handshake::client: Client handshake done.
+2026-11-27T23:08:10.748906Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:08:10.749010Z DEBUG nori_acp_host::registry: Mock ACP agent path resolved to: targets/804c/debug/mock_acp_agent
+2026-11-27T23:08:10.749818Z DEBUG tokio_tungstenite: websocket start_send error: Trying to work with closed connection
+2026-11-27T23:08:10.749882Z DEBUG nori_acp_host::remote::host_wire: managed host connection ended error=WebSocket protocol error: Connection reset without closing handshake

@@ -1,0 +1,9 @@
+{
+  "id": "4e82a48c698c1d38",
+  "name": "nori-cli",
+  "git_remote": "https://github.com/tilework-tech/nori-cli",
+  "git_root": "/home/sprite/org/workspace/.worktrees/verify",
+  "cwd": "/home/sprite/org/workspace/.worktrees/verify/results/attach-builtins-802-804/audit/main-214d79b0/s1-zero/roots/alpha/app",
+  "created_at": "2026-11-27T23:04:20.928Z",
+  "updated_at": "2026-11-27T23:04:20.928Z"
+}

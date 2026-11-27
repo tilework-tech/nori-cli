@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• This session now runs Lark.
+
+
+› status
+
+
+• Lark turn 1 on lark-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-FpTq/host-project.
+
+  2 ready
+
+
+〉
+
+  / commands · @ files · controlling · host-project · kestrel · ready · Approvals: Agent · ctrl+d detach

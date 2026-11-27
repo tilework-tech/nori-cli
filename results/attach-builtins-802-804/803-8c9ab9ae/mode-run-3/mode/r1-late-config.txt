@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=workspace-write, Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Osprey turn 1 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /tmp/abv-q5ot/host-project.
+
+
+  Session config
+  Select an ACP session setting to change
+
+  ▏› 1. Model (harbor-mini)                                                                                ▕
+     2. Effort (Low)
+
+  ↑↓/j/k move  enter select  esc close
+

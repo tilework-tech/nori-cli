@@ -1,0 +1,3 @@
+PASS W0         watcher opens the Kestrel session
+FAIL W1         watcher stays on the changed session and sees its new turns (missing /Lark read: second after switch/ in w1-watcher-after)
+FAIL W2         watcher is not moved to the other Lark session (found /Lark turn 1/ in w1-watcher-after)

@@ -1,0 +1,14 @@
+PASS C0a        /mention is offered in attach
+FAIL C0b        /mention is not greyed on a current host (found //mention .*not available/ in c0-slash)
+FAIL C1a        no session: host folder file is offered (missing /harbor-chart-on-host.md/ in c1-no-session)
+PASS C1b        no session: the attaching folder is never searched
+FAIL C1c        in a session: session folder file is offered (missing /harbor-chart-on-host.md/ in c1-session)
+PASS C1d        in a session: client file not offered
+FAIL C2a        Tab inserts the host path (missing /〉@?harbor-chart-on-host.md/ in c2-inserted)
+FAIL C2b        agent prompt lacks the host path
+FAIL C5a        image prompt: 22:04:58 prompt kestrel-1 '/mentionharbor-buoy' blocks=['text']
+FAIL C3a        search follows the foreground session's folder (missing /harbor-chart-in-other-host-folder.md/ in c3-other-folder)
+PASS C3b        other folders are not mixed in
+FAIL C4a        a watcher's /mention searches the watched session's host folder (missing /harbor-chart-in-other-host-folder.md/ in c4-watcher)
+PASS C6a        plain nori /mention completes from its own folder
+PASS C6b        plain nori inserts the same way

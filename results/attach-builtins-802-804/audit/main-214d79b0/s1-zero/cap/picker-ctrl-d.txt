@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 4 · 1 failed · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+   ○ who answers                                                              claude-code   ready
+     app · claude-code heard: who answers                                                   35s ago
+▏› · who now                                                                  codex         closed                     ▕
+▏    app · codex heard: who now                                                             1s ago                     ▕
+   ✕ new session                                                              codx          failed
+     no reply yet                                                                           26s ago
+   ○ root flag                                                                claude-code   ready
+     app · claude-code heard: root flag                                                     10s ago
+
+↑↓/j/k move  enter open  ctrl+d remove  tab waiting on you  esc close
+

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+• This session now runs Osprey.
+
+
+› status
+
+
+• Osprey turn 1 on osprey-1: model harbor-mini, effort low, mode workspace-write, cwd /tmp/abv-pr7O/host-
+  project.
+
+
+› status
+
+
+• Osprey turn 2 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /tmp/abv-pr7O/host-project.
+
+                                                                                                 [ read-only ]
+〉
+
+  / commands · controlling · host-project · codex · ready · Approvals: Ask · ctrl+d detach · Approvals: Ask

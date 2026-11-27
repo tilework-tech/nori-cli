@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mCodex options: Mode=[1m[38;5;6mworkspace-write[0m[39m[49m, Model=[1m[38;5;6mharbor-mini[0m[39m[49m, Effort=[1m[38;5;6mLow[0;2m[39m[49m (/config to change)
+
+[0m[39m[49m
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mOsprey turn 1 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /tmp/abv-HqMQ/host-project.
+
+                                                                                                 [2m[ read-only ]
+[0;1m[39m[49m〉
+
+[0m[39m[49m  [1m/[0;2m[39m[49m commands · [0m[38;5;2m[49mcontrolling[2m[39m · host-project · codex · ready · Approvals: Ask · ctrl+d detach · [0m[38;5;5m[49mApprovals: Ask

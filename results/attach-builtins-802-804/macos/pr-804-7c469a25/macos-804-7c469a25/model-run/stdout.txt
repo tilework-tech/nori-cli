@@ -1,0 +1,29 @@
+PASS B1a        host-confirmed /model change is announced
+PASS B1b        next reply uses the confirmed model
+PASS B2a        agent rejection is shown
+PASS B2b        rejected value is not announced as set
+PASS B2c        picker still shows the confirmed model after a rejection
+PASS B2d        agent still runs the confirmed model
+PASS B5a        /config lists Model with the confirmed value
+PASS B5b        /config leaves out agent and permission mode
+PASS B5c        effort change confirmed
+PASS B5d        next reply uses effort high
+PASS B4a        a later attach (after Alt+T) sees the confirmed model
+PASS B3a        delayed answer does not land in the other session
+PASS B3b        other session's config untouched
+PASS B3c        delayed answer is shown in the session it was made in
+PASS B3d        agent confirms the delayed change
+PASS B3e        terminal attached while the answer was pending sees it
+PASS B6a        watcher's /model is greyed
+PASS B6b        watcher's /config is greyed
+PASS R1a        /config hides the native mode option
+PASS R1b        agent confirms the native mode change
+PASS R1d        controller's mode badge does not show the replaced native mode
+FAIL R1e        footer repeats 'Approvals: Ask'
+PASS R1c        later attach shows Ask as current
+PASS R1f        later attach's mode badge does not show the replaced native mode
+PASS R2a        same-ID replacement by Moss
+PASS R2b        controller no longer offers the previous agent's model
+FAIL R2d        later attach by ID opens the replaced session itself (missing /now runs Moss/ in r2-late-attach)
+FAIL R2c        later attach does not offer the replaced agent's models (found /[0-9]\. harbor/ in r2-late-model)
+FAIL B7a        plain nori /model lists the advertised models (missing /harbor-mini.*/ in b7-plain-model)

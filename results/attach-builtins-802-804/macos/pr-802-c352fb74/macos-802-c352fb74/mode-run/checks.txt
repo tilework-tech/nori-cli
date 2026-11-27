@@ -1,0 +1,12 @@
+PASS R1a        /config hides the native mode option
+PASS R1b        agent confirms the native mode change
+FAIL R1d        controller's mode badge does not show the replaced native mode (found /\[ workspace-write \]/ in r1-reply)
+FAIL R1e        footer repeats 'Approvals: Ask'
+PASS R1c        later attach shows Ask as current
+FAIL R1f        later attach's mode badge does not show the replaced native mode (found /\[ workspace-write \]/ in r1-late-control)
+FAIL R2a        no in-place Moss replacement
+PASS R2b        controller no longer offers the previous agent's model
+FAIL R2d        later attach by ID opens the replaced session itself (missing /now runs Moss/ in r2-late-attach)
+FAIL R2e        list opens the replaced session (missing /controlling .* moss .* ready/ in r2-list-open)
+PASS R2f        replaced session (via list) offers no previous-agent models
+PASS R2c        later attach does not offer the replaced agent's models

@@ -1,0 +1,3 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+4c261233-0f4c-4ad1-9f2d-150a6c0001b2  codex             ready                 1m  /tmp/abv-audO/host-project  status
+925f731a-9dd6-41ee-b27d-eed61d3e667b  kestrel           ready                36s  /tmp/abv-audO/host-project  /model/agent

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉_ ▐
+
+  System       /private/tmp/abv-Zs2B/host-project
+  Agent        Kestrel
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+╭───────────────────────────────────────────────────────────────────────────────────────╮
+│ ✨ Update available! 0.0.0 -> 0.30.0                                                  │
+│ Run echo 'Please visit https://github.com/tilework-tech/nori-cli/releases' to update. │
+│                                                                                       │
+│ See full release notes:                                                               │
+│ https://github.com/tilework-tech/nori-cli/releases/latest                             │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+
+• Kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+〉harbor-chart
+
+  Enter send · Ctrl+J newline

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1mSessions 2 · 1 working · 1 ready[0;2m[39m[49m  tab: waiting only · / search
+
+[0;1m[39m[49mAll[0m[39m[49m  [38;5;8mwaiting on you
+
+[39m [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                    [1mAgent[0m[39m[49m         [1mStatus
+[38;5;2m▏›[0m[39m[49m ○ perm boat                                                                [38;5;3mclaude-code[39m   [38;5;2mready[39m                      [1m[38;5;2m▕
+▏[0m[39m[49m  [38;5;8m  app · claude-code permission: {"outcome": "selected", "optionId": "all…[39m                [38;5;8m17s ago[39m                    [1m[38;5;2m▕
+[0m[39m[49m   ⠋ relay 80 reef                                                            [38;5;3mclaude-code[39m   [38;5;6mworking
+[39m   [38;5;8m  app · - reef row 01 - reef row 02 - reef row 03 - reef row 04 - reef r…[39m                [38;5;8m0s ago
+
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose
+

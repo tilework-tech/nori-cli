@@ -1,0 +1,40 @@
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-max, effort low, mode None, cwd /private/tmp/abv-BqQ5/host-
+  project.
+
+
+› status
+
+
+• Kestrel turn 2 on kestrel-1: model harbor-max, effort low, mode None, cwd /private/tmp/abv-BqQ5/host-
+  project.
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-max, effort high, mode None, cwd /private/tmp/abv-BqQ5/host-
+  project.
+
+
+› status
+
+
+• Kestrel turn 4 on kestrel-1: model harbor-mini, effort high, mode None, cwd /private/tmp/abv-BqQ5/host-
+  project.
+
+  2 ready
+
+
+/ con
+
+  /config   watching · Alt+T to take control
+  /context  visualize context usage and inspect local instructions

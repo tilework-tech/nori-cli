@@ -1,0 +1,2 @@
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+b0bba7aa-b789-49a1-8dcd-1f89f1a1d07f  kestrel           ready                24s  /tmp/abv-7yAt/host-project  -

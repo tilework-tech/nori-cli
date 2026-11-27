@@ -1,0 +1,2 @@
+nori-ai-cli 0.0.0
+e94e9c9525eec12126a745434d33183bb388d7249342a6e0ca9d858a2d20b708  targets/804c/debug/nori

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Kestrel turn 1 on kestrel-1: model harbor-mini, effort low, mode None, cwd /private/tmp/abv-9mLR/host-
+  project.
+
+  3 ready
+
+
+  Choose an agent
+  Starts a new session with it; this conversation keeps running
+
+     5. OpenCode
+        Adapter not installed. install OpenCode and add `opencode` to PATH
+     6. Cursor Agent
+        Adapter not installed. install the Cursor CLI from https://cursor.com/docs/cli/installation and ad…
+     7. Hermes Agent
+        Adapter not installed. install Hermes Agent with its ACP extra on PATH and run `hermes acp --check…
+     8. Pi
+        Installed
+     9. Kestrel (current)
+        Installed
+  ▏›    Lark                                                                                               ▕
+  ▏     Installed                                                                                          ▕
+  ↑↓/j/k move  enter select  esc close
+

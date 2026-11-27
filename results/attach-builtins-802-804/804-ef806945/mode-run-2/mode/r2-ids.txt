@@ -1,0 +1,4 @@
+K3=a3301031-c9e4-49e2-9aa4-693690660aab O1=6a51ca5d-6341-4b86-a6f4-717b2205da58
+ID                                    AGENT             STATUS               AGE  CWD                         TITLE
+6a51ca5d-6341-4b86-a6f4-717b2205da58  codex             ready                 1m  /tmp/abv-HqMQ/host-project  status
+a3301031-c9e4-49e2-9aa4-693690660aab  moss              ready                18s  /tmp/abv-HqMQ/host-project  -

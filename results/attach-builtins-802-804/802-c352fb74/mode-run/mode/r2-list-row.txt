@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=workspace-write, Model=harbor-mini, Effort=Low (/config to change)
+
+
+› status
+
+
+• Osprey turn 1 on osprey-1: model harbor-mini, effort low, mode read-only, cwd /tmp/abv-audO/host-project.
+
+
+› /config/model
+
+
+• Osprey read: /config/model
+
+■ /model: not available in nori attach yet
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                          Agent         Status
+▏› ○ status (on screen)                                             codex         ready                      ▕
+▏    host-project · Osprey read: /config/model                      harbor-mini   6s ago                     ▕
+   ○ /model/agent                                                   kestrel       ready
+     host-project · Kestrel read: /model/agent                      harbor-mini   26s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+• kestrel options: Model=harbor-mini, Effort=Low (/config to change)
+
+
+› /modelstatus
+
+
+• Kestrel read: /modelstatus
+
+
+› /model/model
+
+
+• Kestrel read: /model/model
+
+
+› status
+
+
+• Kestrel turn 3 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-25wl/host-project.
+
+
+› /configstatus
+
+
+• Kestrel read: /configstatus
+
+• This terminal now controls the host.
+
+■ /model: not available in nori attach yet
+
+
+/ model
+
+  /model  not available in nori attach yet

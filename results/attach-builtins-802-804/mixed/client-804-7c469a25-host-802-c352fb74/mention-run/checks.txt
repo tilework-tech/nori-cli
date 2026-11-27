@@ -1,0 +1,14 @@
+PASS C0a        /mention is offered in attach
+PASS C0b        /mention is not greyed on a current host
+PASS C1a        no session: host folder file is offered
+PASS C1b        no session: the attaching folder is never searched
+PASS C1c        in a session: session folder file is offered
+PASS C1d        in a session: client file not offered
+PASS C2a        Tab inserts the host path
+PASS C2b        agent receives the mentioned host path
+PASS C5a        image match goes to the agent as a host path, no image bytes
+PASS C3a        search follows the foreground session's folder
+PASS C3b        other folders are not mixed in
+FAIL C4a        a watcher's /mention searches the watched session's host folder (missing /harbor-chart-in-other-host-folder.md/ in c4-watcher)
+PASS C6a        plain nori /mention completes from its own folder
+PASS C6b        plain nori inserts the same way

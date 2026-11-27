@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mkestrel options: Model=[1m[38;5;6mharbor-mini[0m[39m[49m, Effort=[1m[38;5;6mLow[0;2m[39m[49m (/config to change)
+[0m[39m[49m
+
+[1;2m› [0m[39m[49mstatus
+
+
+[2m• [0m[39m[49mKestrel turn 1 on kestrel-1: model harbor-mini, effort low, mode None, cwd /tmp/abv-Aq1k/host-project.
+
+  [2m3 ready[0m[39m[49m
+
+
+  [1mChoose an agent[0m[39m[49m
+  [38;5;8mStarts a new session with it; this conversation keeps running[39m
+
+     7. OpenCode
+        [38;5;8mAdapter not[39m [38;5;8minstalled.[39m [38;5;8minstall[39m [38;5;8mOpenCode[39m [38;5;8mand[39m [38;5;8madd[39m [38;5;8m`opencode`[39m [38;5;8mto[39m [38;5;8mPATH[39m
+     8. Cursor Agent
+        [38;5;8mInstalled[39m
+     9. Hermes Agent
+        [38;5;8mAdapter not[39m [38;5;8minstalled.[39m [38;5;8minstall[39m [38;5;8mHermes[39m [38;5;8mAgent[39m [38;5;8mwith[39m [38;5;8mits[39m [38;5;8mACP[39m [38;5;8mextra[39m [38;5;8mon[39m [38;5;8mPATH[39m [38;5;8mand[39m [38;5;8mrun[39m [38;5;8m`hermes[39m [38;5;8macp[39m [38;5;8m--check…[39m
+        Pi
+        [38;5;8mInstalled[39m
+        Kestrel (current)
+        [38;5;8mInstalled[39m
+  [1m[38;5;2m▏›[0m[39m[49m    Lark                                                                                               [1m[38;5;2m▕
+[0m[39m[49m  [1m[38;5;2m▏[0m[39m[49m     [38;5;8mInstalled                                                                                          [1m[38;5;2m▕
+[0m[39m[49m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose[39m
+
