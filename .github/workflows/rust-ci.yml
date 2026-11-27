@@ -45,7 +45,7 @@ jobs:
       - name: Acceptance harness (independent verifier)
         uses: actions/checkout@v6
         with:
-          ref: 0b01cd441a8a5f8ed63aac5222b7f03592d9b664
+          ref: 446439cc510cbf04a820a62556ff3fbf4c9b2d47
           path: acc
           persist-credentials: false
       - name: Interactive tmux scenarios on native macOS
