@@ -1,180 +1,66 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    branches: ['verify/pr-804-ef806945-native-host']
 
 jobs:
   checks:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    name: macOS interactive acceptance for #804 at ef806945
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: nori-rs
     env:
       CARGO_INCREMENTAL: "0"
-      # Speed up repeated builds across CI runs by caching compiled objects.
-      USE_SCCACHE: "true"
-      SCCACHE_CACHE_SIZE: 10G
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
-
     steps:
       - uses: actions/checkout@v6
-
-      - name: Free disk space
-        if: runner.os == 'Linux'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          # sudo apt-get update
-          # sudo apt-get install -y coreutils musl-tools
-          docker system prune -af || true
-
-      - name: Setup faster linker
-        uses: rui314/setup-mold@v1
-
+        with:
+          ref: ef806945aa93eedcd00f3cf5049b0dcaec4f93b1
+          persist-credentials: false
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = ef806945aa93eedcd00f3cf5049b0dcaec4f93b1 && git diff --quiet HEAD -- . && git rev-parse HEAD HEAD:nori-rs && uname -sm && sw_vers
       - uses: dtolnay/rust-toolchain@1.90
         with:
-          targets: ${{ matrix.target }}
-          components: clippy, rustfmt
-
+          targets: aarch64-apple-darwin
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: ${{ matrix.target }}
-          components: rustfmt
-
-      - name: Compute lockfile hash
-        id: lockhash
-        shell: bash
+          targets: aarch64-apple-darwin
+      - name: PR PTY suites on macOS (Linux gate removed), two rounds
         run: |
-          set -euo pipefail
-          echo "hash=${{ hashFiles('nori-rs/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
-          echo "toolchain_hash=${{ hashFiles('nori-rs/rust-toolchain.toml') }}" >> "$GITHUB_OUTPUT"
-
-      # Cache registry and git deps only. Do not cache ~/.cargo/bin because
-      # restoring tool binaries after rust-toolchain setup can overwrite
-      # rustup-managed cargo shims on hosted runners.
-      - name: Restore cargo home cache
-        id: cache_cargo_home_restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
-          restore-keys: |
-            cargo-home-${{ matrix.runner }}-${{ matrix.target }}-
-
-      # Install and configure sccache for faster builds
-      - name: Install sccache
-        if: ${{ env.USE_SCCACHE == 'true' }}
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2
-        with:
-          tool: sccache
-          version: 0.7.5
-
-      - name: Configure sccache backend
-        if: ${{ env.USE_SCCACHE == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
-            echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
-            echo "Using sccache GitHub backend"
-          else
-            echo "SCCACHE_GHA_ENABLED=false" >> "$GITHUB_ENV"
-            echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
-            echo "Using sccache local disk + actions/cache fallback"
-          fi
-
-      - name: Enable sccache wrapper
-        if: ${{ env.USE_SCCACHE == 'true' }}
-        shell: bash
-        run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
-
-      - name: Restore sccache cache (fallback)
-        if: ${{ env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true' }}
-        id: cache_sccache_restore
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.sccache/
-          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
-          restore-keys: |
-            sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-
-            sccache-${{ matrix.runner }}-${{ matrix.target }}-
-
-      # CI checks
-      - name: cargo fmt
-        run: cargo +nightly fmt -- --check
-      # - name: cargo check
-      #   run: cargo check --profile ci-test --target ${{ matrix.target }}
-      # - name: cargo clippy
-      #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-      - name: cargo build
-        run: |
-          mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
-          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
+          mkdir -p "$RUNNER_TEMP/mac" target/mock-acp-out
+          cargo +nightly build -p mock-acp-agent --profile ci-test --target aarch64-apple-darwin --artifact-dir target/mock-acp-out -Z unstable-options
+          export MOCK_ACP_AGENT_BIN="$GITHUB_WORKSPACE/nori-rs/target/mock-acp-out/mock_acp_agent"
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/attach_agents.rs
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/attach_config.rs
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/attach_mention.rs
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
+          for round in 1 2; do cargo test --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --no-fail-fast --test attach_agents --test attach_config --test attach_mention --test host_attach > "$RUNNER_TEMP/mac/pty-round-$round.log" 2>&1 || true; grep -E "^test .* (ok|FAILED)$|^test result" "$RUNNER_TEMP/mac/pty-round-$round.log" | sed "s/^/round $round: /"; done | tee "$RUNNER_TEMP/mac/pty-rounds.txt"
+          git checkout -- tui-pty-e2e/tests
+      - name: Release nori at ef806945
         env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+          CARGO_PROFILE_RELEASE_LTO: "off"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
-
-      # Save cargo home cache (only when key wasn't hit)
-      - name: Save cargo home cache
-        if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
+          cargo build --release --locked --bin nori --target aarch64-apple-darwin
+          test "$(git rev-parse HEAD)" = ef806945aa93eedcd00f3cf5049b0dcaec4f93b1 && git diff --quiet HEAD -- .
+      - name: Acceptance harness (independent verifier)
+        uses: actions/checkout@v6
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
-
-      # Save sccache cache (fallback for when GHA backend isn't available)
-      - name: Save sccache cache (fallback)
-        if: always() && !cancelled() && env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.sccache/
-          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
-
-      - name: sccache stats
-        if: always() && env.USE_SCCACHE == 'true'
-        continue-on-error: true
-        run: sccache --show-stats || true
-
-      - name: sccache summary
-        if: always() && env.USE_SCCACHE == 'true'
-        shell: bash
+          ref: 0b01cd441a8a5f8ed63aac5222b7f03592d9b664
+          path: acc
+          persist-credentials: false
+      - name: Interactive tmux scenarios on native macOS
+        working-directory: acc/harness/attach-builtins-verify
         run: |
-          {
-            echo "### sccache stats — ${{ matrix.target }}";
-            echo;
-            echo '```';
-            sccache --show-stats || true;
-            echo '```';
-          } >> "$GITHUB_STEP_SUMMARY"
+          brew install tmux bash >/dev/null
+          tmux -V; bash --version | head -1; python3 --version
+          NORI_BIN="$GITHUB_WORKSPACE/nori-rs/target/aarch64-apple-darwin/release/nori"
+          bash run-all.sh macos-804-ef806945 "$NORI_BIN" "$RUNNER_TEMP/mac" || true
+          cat "$RUNNER_TEMP/mac/macos-804-ef806945/checks.txt" || true
+      - name: Upload macOS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-pr-804-ef806945
+          path: ${{ runner.temp }}/mac
