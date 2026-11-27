@@ -1,0 +1,55 @@
+frame t=0 draw_us=57
+frame t=40 draw_us=115
+frame t=80 draw_us=59
+frame t=120 draw_us=358
+frame t=160 draw_us=68
+frame t=200 draw_us=63
+frame t=240 draw_us=71
+key t=264 Down key_to_flush_us=53
+frame t=264 draw_us=33
+frame t=280 draw_us=58
+frame t=320 draw_us=69
+frame t=360 draw_us=67
+frame t=400 draw_us=67
+frame t=440 draw_us=57
+frame t=480 draw_us=73
+key t=517 Down key_to_flush_us=50
+frame t=517 draw_us=30
+frame t=520 draw_us=42
+frame t=560 draw_us=60
+frame t=600 draw_us=58
+frame t=640 draw_us=57
+frame t=680 draw_us=54
+frame t=720 draw_us=56
+frame t=760 draw_us=57
+key t=770 Up key_to_flush_us=71
+frame t=770 draw_us=37
+frame t=800 draw_us=55
+frame t=840 draw_us=59
+frame t=880 draw_us=58
+frame t=920 draw_us=56
+frame t=960 draw_us=55
+frame t=1000 draw_us=63
+frame t=1040 draw_us=51
+frame t=1080 draw_us=61
+frame t=1120 draw_us=56
+frame t=1160 draw_us=60
+frame t=1200 draw_us=61
+frame t=1240 draw_us=63
+frame t=1280 draw_us=54
+frame t=1320 draw_us=60
+frame t=1360 draw_us=58
+frame t=1400 draw_us=59
+frame t=1440 draw_us=67
+frame t=1480 draw_us=56
+frame t=1520 draw_us=59
+frame t=1560 draw_us=58
+frame t=1600 draw_us=60
+frame t=1640 draw_us=60
+key t=2226 Enter key_to_flush_us=123
+frame t=2226 draw_us=99
+key t=2829 Down key_to_flush_us=88
+frame t=2829 draw_us=30
+key t=3432 Enter key_to_flush_us=111
+frame t=3432 draw_us=31
+key t=4035 Enter key_to_flush_us=99
