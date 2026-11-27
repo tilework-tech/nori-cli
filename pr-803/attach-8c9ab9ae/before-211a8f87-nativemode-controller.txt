@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• amber options: Permission=Explore, Model=Initial, Effort=Low (/config to change)
+
+• amber option updated: Permission=Edit
+
+• This session now runs Birch.
+
+
+〉
+
+  / commands · @ files · ? help · controlling · project · amber · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• birch options: Permission=Explore, Model=Initial, Effort=Low (/config to change)
+
+• birch option updated: Permission=Edit
+
+                                                                                                      [ Edit ]
+〉
+
+  / commands · @ files · ? help · controlling · project · birch · ready · Approvals: Agent · ctrl+d detach

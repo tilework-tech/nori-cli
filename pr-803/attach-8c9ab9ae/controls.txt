@@ -1,0 +1,14 @@
+== 211a8f87 fix(protocol): keep config answers, loads and resumes apart on
+  pass  chatwidget::tests::host_config::a_restart_under_the_same_id_with_no_options_drops_the_previous_agents
+  FAIL  chatwidget::tests::host_config::the_new_agents_own_mode_survives_an_in_place_change_in_either_order
+  pass  chatwidget::tests::host_config::a_new_agent_without_options_leaves_none_in_either_order
+  pass  a_terminal_that_attaches_later_sees_the_confirmed_model
+  FAIL  the_controller_keeps_the_new_agents_own_mode_after_an_in_place_change
+  pass  an_agent_replaced_by_one_without_options_leaves_no_model_behind
+== 8c9ab9ae fix(tui): keep the new agent's own mode after an in-place agen
+  pass  chatwidget::tests::host_config::a_restart_under_the_same_id_with_no_options_drops_the_previous_agents
+  pass  chatwidget::tests::host_config::a_new_agent_without_options_leaves_none_in_either_order
+  pass  chatwidget::tests::host_config::the_new_agents_own_mode_survives_an_in_place_change_in_either_order
+  pass  a_terminal_that_attaches_later_sees_the_confirmed_model
+  pass  the_controller_keeps_the_new_agents_own_mode_after_an_in_place_change
+  pass  an_agent_replaced_by_one_without_options_leaves_no_model_behind
