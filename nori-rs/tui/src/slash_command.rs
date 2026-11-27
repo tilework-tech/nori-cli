@@ -204,6 +204,27 @@ pub fn built_in_slash_commands() -> Vec<(&'static str, SlashCommand)> {
         .collect()
 }
 
+/// Other names builtins answer to when typed. The menu lists each builtin
+/// once, under its own name.
+const ALIASES: [(&str, SlashCommand); 1] = [("agents", SlashCommand::Agent)];
+
+/// The visible builtin typed as `name`, by its own name or an alias.
+pub fn builtin_named(name: &str) -> Option<SlashCommand> {
+    built_in_slash_commands()
+        .into_iter()
+        .chain(ALIASES)
+        .find(|(command_name, command)| *command_name == name && command.is_visible())
+        .map(|(_, command)| command)
+}
+
+/// The aliases `command` answers to.
+pub fn aliases_of(command: SlashCommand) -> impl Iterator<Item = &'static str> {
+    ALIASES
+        .into_iter()
+        .filter(move |(_, aliased)| *aliased == command)
+        .map(|(alias, _)| alias)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

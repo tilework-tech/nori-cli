@@ -139,6 +139,7 @@ fn a_reconnecting_controller_is_not_offered_send_keys() {
         connected: false,
         stopped: None,
         features: HostFeatures::default(),
+        agents: Vec::new(),
     });
     type_text(&mut chat, "synthetic draft");
     let rendered = screen(&chat);
@@ -192,6 +193,7 @@ fn a_watcher_is_never_offered_send_keys() {
         connected: true,
         stopped: None,
         features: HostFeatures::default(),
+        agents: Vec::new(),
     });
     send(&mut chat, paused_queue());
     let empty = screen(&chat);
@@ -216,6 +218,7 @@ fn a_remote_host_without_shell_or_path_search_offers_neither() {
             remote: true,
             ..HostFeatures::default()
         },
+        agents: Vec::new(),
     });
     let rendered = screen(&chat);
     assert!(rendered.contains("/ commands · ? help"), "{rendered}");

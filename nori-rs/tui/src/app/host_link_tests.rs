@@ -124,6 +124,7 @@ fn controlling() -> HostConnection {
         connected: true,
         stopped: None,
         features: remote_host(),
+        agents: Vec::new(),
     }
 }
 
@@ -133,6 +134,7 @@ fn watching() -> HostConnection {
         connected: true,
         stopped: None,
         features: remote_host(),
+        agents: Vec::new(),
     }
 }
 
@@ -222,6 +224,7 @@ async fn a_dropped_connection_fails_unanswered_calls_and_comes_back_initialized(
             connected: false,
             stopped: None,
             features: remote_host(),
+            agents: Vec::new(),
         }
     );
     let error = settled(receipt)

@@ -88,6 +88,17 @@ impl ChatWidget {
     /// in a folder named from the session on screen, or from this
     /// terminal's folder, and the App shows it once the host lists it.
     pub(super) fn start_host_session(&mut self, args: &str) {
+        self.start_host_session_with(args, None, None);
+    }
+
+    /// [`Self::start_host_session`] with `agent`, when the caller chose it,
+    /// and `note` added to the session once it is on screen.
+    pub(super) fn start_host_session_with(
+        &mut self,
+        args: &str,
+        agent: Option<&str>,
+        note: Option<String>,
+    ) {
         let Some(features) = self.host_connection.as_ref().map(|c| c.features) else {
             return;
         };
@@ -97,7 +108,7 @@ impl ChatWidget {
         } else {
             crate::host_client::new_session::Base::Terminal(&cwd)
         };
-        let params = match crate::host_client::new_session::params(
+        let mut params = match crate::host_client::new_session::params(
             args,
             base,
             features.session_folders,
@@ -110,12 +121,18 @@ impl ChatWidget {
                 return;
             }
         };
+        if let Some(agent) = agent {
+            params["agent"] = serde_json::json!(agent);
+        }
         let tx = self.app_event_tx.clone();
         let reply = tx.host_receipt(crate::host_client::HostCall::NewSession(params));
         tokio::spawn(async move {
             match reply.await {
                 Ok(started) => match started["session_id"].as_str() {
-                    Some(id) => tx.send(AppEvent::JoinedSessionStarted(id.to_owned())),
+                    Some(id) => tx.send(AppEvent::JoinedSessionStarted {
+                        id: id.to_owned(),
+                        note,
+                    }),
                     None => tx.send(AppEvent::HarnessActionFailed(
                         "The host did not say which session it started.".into(),
                     )),

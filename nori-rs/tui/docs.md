@@ -26,7 +26,7 @@ UI strings keep that word.
 | `bottom_pane/` | Composer, footer, popups, approval overlay |
 | `presentation/` | Private projection of ACP updates into display items |
 | `history_cell/`, `exec_cell/`, `client_tool_cell.rs`, `markdown*`, `diff_render.rs` | History cells and their rendering |
-| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host); `AttachOptions`; `HostEndpoint` keeps the local token and presents it on every reconnect; `HostError` carries the JSON-RPC `code`; `HostFeatures` read from the host's `initialize` capabilities |
+| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host); `AttachOptions`; `HostEndpoint` keeps the local token and presents it on every reconnect; `HostError` carries the JSON-RPC `code`; `HostFeatures` and the host's agent list read from its `initialize` capabilities |
 | `program_status/` | OSC 7501 terminal status: `ProgramStatusTracker` (fold over one session's events) and `ProgramStatusReporter` (encode and write) |
 | `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, exit card, update prompt |
 | `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
@@ -115,7 +115,16 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   host serves, such as folders for `/new` and `find_paths` completion.
   In-process commands the host serves a method for run joined once the host
   advertises it (`command_availability::served_by_host`): `/goal` with
-  `goal`, `/context` with `context`, `/compact` with `compact`. Older hosts keep the refusal.
+  `goal`, `/context` with `context`, `/compact` with `compact`, `/agent` with
+  `agents`. Older hosts keep the refusal. Joined `/agent` (`chatwidget/host_agents.rs`)
+  lists `HostConnection.agents`, read from the host's `initialize`
+  `nori/preparedAgent` `agentOption` (`host_client/agents.rs`); a row whose
+  description is not "Installed" cannot start. It starts a session with the
+  agent (`_nori/session/new` with `agent`), or, before the first prompt,
+  changes the session's agent through `session/set_config_option` `agent`
+  and ignores the old agent's `Shutdown` it asked for (`AgentChange`).
+  `slash_command::builtin_named` resolves aliases such as `/agents`; the
+  command popup matches them but lists the builtin once.
   A refused builtin command stays in the composer as `/command`; a command
   the composer does not know goes to the agent as a prompt. With no session
   on screen, `@` asks a joined host that serves `find_paths` to search its own

@@ -127,7 +127,9 @@ pub(super) fn agent_option(current: &str) -> Value {
         .map(|agent| {
             // The adapter can start when its launch command resolves here.
             let description = match nori_harness::registry::get_agent_config(&agent.agent_name) {
-                Ok(config) if which::which(&config.command).is_ok() => "Installed".to_owned(),
+                Ok(config) if which::which(&config.command).is_ok() => {
+                    nori_protocol::AGENT_INSTALLED.to_owned()
+                }
                 Ok(config) if !config.install_hint.is_empty() => {
                     format!("Adapter not installed. {}", config.install_hint)
                 }

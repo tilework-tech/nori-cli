@@ -4,7 +4,7 @@ expression: menu
 ---
 /
 
-  /agent            not available in nori attach yet
+  /agent            not available on this host yet
   /model            not available in nori attach yet
   /config           not available in nori attach yet
   /approvals        watching · Alt+T to take control

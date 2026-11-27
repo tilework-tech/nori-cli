@@ -83,6 +83,11 @@ pub struct PreparedAgentActivation {
     pub saved_session_id: Option<String>,
 }
 
+/// The description a host gives an agent in its `agent` option when it found
+/// the agent's launch command; any other description says why it cannot
+/// start.
+pub const AGENT_INSTALLED: &str = "Installed";
+
 /// The host's prepared-agent capability on initialize.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

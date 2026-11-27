@@ -94,13 +94,26 @@ pub(crate) enum Surface {
     },
 }
 
-/// Commands plain `nori` runs in process that a joined host also runs once
-/// it advertises their method; `Some(needs_control)` when it does.
-fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool> {
+/// A command a joined host runs only once it advertises the method behind it.
+struct HostServed {
+    /// The host advertised it.
+    served: bool,
+    needs_control: bool,
+}
+
+/// Commands a joined host runs once it advertises their method.
+fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<HostServed> {
+    let served = |served, needs_control| {
+        Some(HostServed {
+            served,
+            needs_control,
+        })
+    };
     match command {
-        SlashCommand::Goal => features.goal.then_some(false),
-        SlashCommand::Context => features.context.then_some(false),
-        SlashCommand::Compact => features.compact.then_some(true),
+        SlashCommand::Goal => served(features.goal, false),
+        SlashCommand::Context => served(features.context, false),
+        SlashCommand::Compact => served(features.compact, true),
+        SlashCommand::Agent => served(features.agents, true),
         SlashCommand::Quit
         | SlashCommand::Exit
         | SlashCommand::Settings
@@ -108,7 +121,6 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool>
         | SlashCommand::Logout
         | SlashCommand::Screen
         | SlashCommand::Sessions
-        | SlashCommand::Agent
         | SlashCommand::Model
         | SlashCommand::Config
         | SlashCommand::Approvals
@@ -186,7 +198,11 @@ pub(crate) fn unavailable_reason(command: SlashCommand, surface: Surface) -> Opt
             connected,
             features,
         } => match served_by_host(command, features) {
-            Some(needs_control) => joined_host_reason(needs_control, watching, connected),
+            Some(HostServed { served: false, .. }) => Some(NOT_ON_THIS_HOST.to_string()),
+            Some(HostServed {
+                served: true,
+                needs_control,
+            }) => joined_host_reason(needs_control, watching, connected),
             None => match route(command) {
                 Route::Terminal => None,
                 Route::InProcess => Some(NOT_ON_THIS_HOST.to_string()),
@@ -348,6 +364,32 @@ mod tests {
                 unavailable_reason(SlashCommand::Goal, surface),
                 expected.map(str::to_string),
                 "/goal in {surface:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_joined_controller_chooses_agents_only_on_a_host_that_lists_them() {
+        let joined = |watching, connected, agents| Surface::Joined {
+            watching,
+            connected,
+            features: HostFeatures {
+                agents,
+                ..HostFeatures::default()
+            },
+        };
+        let cases = [
+            (joined(false, true, false), Some(NOT_ON_THIS_HOST)),
+            (joined(true, true, false), Some(NOT_ON_THIS_HOST)),
+            (joined(false, true, true), None),
+            (joined(true, true, true), Some(WATCHING)),
+            (joined(false, false, true), Some(RECONNECTING)),
+        ];
+        for (surface, expected) in cases {
+            assert_eq!(
+                unavailable_reason(SlashCommand::Agent, surface),
+                expected.map(str::to_string),
+                "/agent in {surface:?}"
             );
         }
     }

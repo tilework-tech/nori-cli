@@ -337,6 +337,9 @@ impl ChatWidget {
                     crate::app_event::HarnessAction::Compact,
                 ));
             }
+            SlashCommand::Agent if self.host_connection.is_some() => {
+                self.open_host_agent_popup();
+            }
             SlashCommand::Agent => {
                 self.open_agent_popup();
             }

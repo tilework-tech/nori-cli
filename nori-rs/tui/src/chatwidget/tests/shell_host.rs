@@ -276,6 +276,7 @@ async fn a_bang_command_on_an_older_joined_host_is_refused_and_kept() {
         connected: true,
         stopped: None,
         features: crate::host_client::HostFeatures::default(),
+        agents: Vec::new(),
     });
     chat.submit_user_message("!make lint".to_string().into());
 
@@ -356,6 +357,7 @@ async fn a_remote_joined_terminal_shows_the_gray_hint_without_asking_the_host() 
             remote: true,
             ..Default::default()
         },
+        agents: Vec::new(),
     });
     chat.submit_user_message("!touch marker".to_string().into());
 

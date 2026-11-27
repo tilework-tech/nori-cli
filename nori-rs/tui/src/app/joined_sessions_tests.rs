@@ -25,6 +25,7 @@ fn connection() -> HostConnection {
         connected: true,
         stopped: None,
         features: HostFeatures::default(),
+        agents: Vec::new(),
     }
 }
 
@@ -267,7 +268,7 @@ async fn a_started_session_opens_once_the_screen_is_free() {
         FrameRequester::test_dummy(),
         &connection(),
     );
-    app.open_when_listed(BIRCH.to_owned());
+    app.open_when_listed(BIRCH.to_owned(), None);
 
     app.pending_session_activation = Some(super::PendingSessionActivation::New);
     let both = list(&[row(AMBER, "synthetic amber"), row(BIRCH, "synthetic birch")]);

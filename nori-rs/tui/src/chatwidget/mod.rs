@@ -70,6 +70,7 @@ mod external_cancel;
 mod goal;
 mod goal_host;
 mod helpers;
+mod host_agents;
 mod host_role;
 pub(crate) use host_role::JOINED_COMMANDS;
 mod history_host;
@@ -229,6 +230,13 @@ pub(crate) struct ChatWidget {
     /// True once the user closed this session beside others, so its agent
     /// shutting down ends only this session, not Nori.
     closed_by_user: bool,
+    /// This terminal asked the host to change the session's agent in place.
+    /// The host shuts the old agent's process down and starts the new one
+    /// under the same ID, so that shutdown does not end the session here.
+    agent_change: host_agents::AgentChange,
+    /// The joined session's agent process shut down and the session closed
+    /// here; it comes back if the host starts it again under its ID.
+    ended_on_host: bool,
     delegated_child: bool,
     delegations: HashMap<String, nori_protocol::Delegation>,
     delegation_approval: Option<String>,
