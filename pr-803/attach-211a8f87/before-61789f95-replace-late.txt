@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• birch options: Permission=Explore, Model=Initial, Effort=Low (/config to change)
+
+
+  Model
+  Select a value for this ACP session setting
+
+     1. Initial
+  ▏› 2. Amber (current)                                                                                    ▕
+
+  ↑↓/j/k move  / search  enter select  esc close
+

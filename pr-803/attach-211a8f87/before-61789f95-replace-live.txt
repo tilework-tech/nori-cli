@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• amber options: Permission=Explore, Model=Initial, Effort=Low (/config to change)
+
+• amber option set: Model=Amber
+
+• This session now runs Birch.
+
+
+  Select model
+  No model option was advertised for this session
+
+     This agent has no model selector
+     Use /agent to switch between ACP agents
+
+  ↑↓/j/k move  enter select  esc close
+

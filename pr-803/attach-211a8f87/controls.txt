@@ -1,0 +1,20 @@
+== 61789f95 feat(tui): change the model and options of a host session fr
+  FAIL  session_event::response_wire_tests::load_resume_and_set_answers_keep_their_request_across_the_wire
+  FAIL  session_event::response_wire_tests::an_untagged_config_payload_is_never_read_as_a_write
+  FAIL  chatwidget::tests::host_config::an_untagged_config_answer_from_an_older_journal_is_shown_as_a_snapshot
+  FAIL  chatwidget::tests::host_config::a_journaled_answer_changes_and_removes_the_agents_own_mode
+  pass  chatwidget::tests::host_config::a_journaled_load_answer_replaces_options_only_when_it_reports_them
+  FAIL  chatwidget::tests::host_config::a_restart_under_the_same_id_with_no_options_drops_the_previous_agents
+  pass  a_terminal_that_attaches_later_sees_the_confirmed_model
+  pass  a_watcher_adopts_the_controllers_confirmed_model
+  FAIL  an_agent_replaced_by_one_without_options_leaves_no_model_behind
+== 211a8f87 fix(protocol): keep config answers, loads and resumes apart 
+  pass  session_event::response_wire_tests::an_untagged_config_payload_is_never_read_as_a_write
+  pass  session_event::response_wire_tests::load_resume_and_set_answers_keep_their_request_across_the_wire
+  pass  chatwidget::tests::host_config::a_journaled_answer_changes_and_removes_the_agents_own_mode
+  pass  chatwidget::tests::host_config::a_journaled_load_answer_replaces_options_only_when_it_reports_them
+  pass  chatwidget::tests::host_config::an_untagged_config_answer_from_an_older_journal_is_shown_as_a_snapshot
+  pass  chatwidget::tests::host_config::a_restart_under_the_same_id_with_no_options_drops_the_previous_agents
+  pass  a_terminal_that_attaches_later_sees_the_confirmed_model
+  pass  a_watcher_adopts_the_controllers_confirmed_model
+  pass  an_agent_replaced_by_one_without_options_leaves_no_model_behind

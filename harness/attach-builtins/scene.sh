@@ -11,7 +11,7 @@ HOSTHOME=$ROOT/host; PROJECT=$HOSTHOME/project
 CLIENT=$ROOT/client; FOLDER=$ROOT/terminal
 mkdir -p "$PROJECT" "$CLIENT" "$FOLDER"
 for gate in fixture-config-options-only fixture-settings-report; do
-  [ "$SCENE" = model ] && touch "$PROJECT/$gate"
+  case $SCENE in model|replace) touch "$PROJECT/$gate" ;; esac
 done
 agent() { printf '[[agents]]\nname = "%s"\nslug = "%s"\n[agents.distribution.local]\ncommand = "python3"\nargs = ["%s", "%s", "%s"]\n' "$1" "$2" "$FIXTURE" "$2" "$PROJECT"; }
 {
@@ -20,6 +20,7 @@ agent() { printf '[[agents]]\nname = "%s"\nslug = "%s"\n[agents.distribution.loc
   printf '[[agents]]\nname = "Cedar"\nslug = "cedar"\n[agents.distribution.local]\ncommand = "cedar-adapter-absent"\n'
 } > "$HOSTHOME/config.toml"
 echo 'agent = "amber"' > "$CLIENT/config.toml"
+[ "$SCENE" = replace ] && touch "$PROJECT/fixture-no-options-birch"
 echo "synthetic chart" > "$PROJECT/harbor-chart-on-host.md"
 echo "synthetic chart" > "$FOLDER/harbor-chart-on-client.md"
 export NORI_NO_ANALYTICS=1
@@ -28,6 +29,10 @@ for _ in $(seq 50); do [ -s "$HOSTHOME/host/state.json" ] && break; sleep 0.2; d
 ENDPOINT=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["endpoint"])' "$HOSTHOME/host/state.json")
 S=proof-$SCENE
 CMD="cd $FOLDER && HOME=$CLIENT NORI_HOME=$CLIENT $NORI attach --host $ENDPOINT --token-file $HOSTHOME/host/token"
+if [ "$SCENE" = replace ]; then
+  printf '#!/usr/bin/env bash\n%s\necho; echo "-- a second terminal attaches --"; sleep 1\n%s\n' "$CMD" "$CMD" > "$ROOT/twice.sh"
+  chmod +x "$ROOT/twice.sh"; CMD=$ROOT/twice.sh
+fi
 tmux kill-session -t "$S" 2>/dev/null || true
 tmux new-session -d -s "$S" -x 110 -y 44 "asciinema rec -q --overwrite --cols 110 --rows 44 -c '$CMD' $OUT/$SCENE.cast"
 tmux set -t "$S" window-style bg=#141414
@@ -53,6 +58,13 @@ case $SCENE in
     typed "/config"; k Enter; wait_for "Session config"; sleep 1.2; snap config
     k Enter; sleep 1; down_to "Amber"; sleep 1; k Enter; wait_for "option set: Model=Amber"; sleep 1.5; snap confirmed
     k Escape; sleep 0.8; typed "whoami"; k Enter; wait_for "with model amber"; sleep 1.5; snap reply ;;
+  replace)
+    typed "/new"; k Enter; wait_for "amber · ready"; sleep 1
+    typed "/model"; k Enter; wait_for "Select a value"; down_to "Amber"; sleep 0.8; k Enter; wait_for "option set: Model=Amber"; sleep 1; k Escape; sleep 0.8
+    typed "/agent"; k Enter; wait_for "Choose an agent"; down_to "Birch"; sleep 0.8; k Enter; wait_for "This session now runs Birch."; sleep 1
+    typed "/model"; k Enter; sleep 2; snap live; k Escape; sleep 0.8
+    k C-d; wait_for "Sessions"; sleep 1.5; down_to "new session"; k Enter; sleep 2
+    typed "/model"; k Enter; sleep 2; snap late; k Escape ;;
   mention)
     typed "/mention"; k Enter; sleep 0.8; typed "harbor"; wait_for "harbor-chart-on-host.md"; sleep 1.5; snap no-session
     k Escape; sleep 0.5; for _ in $(seq 10); do k BSpace; done
