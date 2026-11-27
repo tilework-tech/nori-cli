@@ -56,6 +56,7 @@ fn type_chars_humanlike(composer: &mut ChatComposer, chars: &[char]) {
 
 mod aliases;
 mod draft;
+mod host_mentions;
 mod part1;
 mod part2;
 mod part3;

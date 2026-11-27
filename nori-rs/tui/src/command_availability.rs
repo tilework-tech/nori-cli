@@ -115,6 +115,7 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<HostS
         SlashCommand::Compact => served(features.compact, true),
         SlashCommand::Agent => served(features.agents, true),
         SlashCommand::Model | SlashCommand::Config => served(features.session_config, true),
+        SlashCommand::Mention => served(features.find_paths, false),
         SlashCommand::Quit
         | SlashCommand::Exit
         | SlashCommand::Settings
@@ -132,7 +133,6 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<HostS
         | SlashCommand::Undo
         | SlashCommand::Browse
         | SlashCommand::Diff
-        | SlashCommand::Mention
         | SlashCommand::Status
         | SlashCommand::Memory
         | SlashCommand::FirstPrompt
@@ -418,6 +418,31 @@ mod tests {
                     command.command()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn a_joined_terminal_mentions_files_only_on_a_host_that_finds_them() {
+        let joined = |watching, connected, find_paths| Surface::Joined {
+            watching,
+            connected,
+            features: HostFeatures {
+                find_paths,
+                ..HostFeatures::default()
+            },
+        };
+        let cases = [
+            (joined(false, true, false), Some(NOT_ON_THIS_HOST)),
+            (joined(false, true, true), None),
+            (joined(true, true, true), None),
+            (joined(false, false, true), None),
+        ];
+        for (surface, expected) in cases {
+            assert_eq!(
+                unavailable_reason(SlashCommand::Mention, surface),
+                expected.map(str::to_string),
+                "/mention in {surface:?}"
+            );
         }
     }
 

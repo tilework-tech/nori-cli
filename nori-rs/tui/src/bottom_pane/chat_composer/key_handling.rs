@@ -516,7 +516,8 @@ impl ChatComposer {
 
                 let sel_path = sel.to_string();
                 // If selected path looks like an image (png/jpeg), attach as image instead of inserting text.
-                let is_image = Self::is_image_path(&sel_path);
+                // A joined host's match names a file on that host, so its path is inserted for the agent.
+                let is_image = Self::is_image_path(&sel_path) && !self.joined_host;
                 if is_image {
                     // Determine dimensions; if that fails fall back to normal path insertion.
                     let path_buf = PathBuf::from(&sel_path);
