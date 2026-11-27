@@ -11,7 +11,11 @@ credentials. Each script prints `PASS`/`FAIL` per check and saves `.txt` and
 | `model.sh BIN OUT` | `/model` and `/config` against agent-confirmed values, rejection, delayed answers across Alt+S and a late attach, watchers, plain `nori` parity |
 | `mode.sh BIN OUT` | Native mode change via `/approvals` then a later attach; same-ID replacement by a zero-option agent then a later attach (by ID and through the list) |
 | `mention.sh BIN OUT` | `/mention` from distinct host and client folders, a session in another host folder, watchers, image matches, plain `nori` parity |
-| `gates.sh CLIENT HOST OUT LABEL` | Mixed client and host versions |
+| `inplace-mode.sh BIN OUT` | In-place `/agent` change to an agent with a native mode: badge and hint row over 12 s, where the next prompt goes, the host receipt, fresh attaches |
+| `watcher-two-sessions.sh BIN OUT` | A watcher on a session that changes agent in place while the host has another live session |
+| `gates.sh CLIENT HOST OUT LABEL` | Mixed client and host versions (`GATED=1` adds the older-host checks) |
+| `mixed.sh OUTROOT` | 1.10 clients on 1.9 hosts and the reverse |
+| `macos/make-workflow.sh` | The native macOS verify workflow (PR PTY suites with the Linux gate removed, plus this harness) |
 | `run-all.sh NAME BIN OUTROOT` | agent, model, mode and mention against one build |
 
 Host agents: Kestrel and Lark (model and effort options), Moss (no options),

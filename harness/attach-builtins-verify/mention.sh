@@ -30,7 +30,7 @@ tail -1 "$ROOT/quill-kestrel.log" > "$SC/c5-agent-prompt.txt"
 grep -q "blocks=\['text'\]" "$SC/c5-agent-prompt.txt" && grep -q "harbor-buoy.png" "$SC/c5-agent-prompt.txt" \
   && check C5a PASS "image match goes to the agent as a host path, no image bytes" || check C5a FAIL "image prompt: $(cat "$SC/c5-agent-prompt.txt")"
 # A session in another host folder: search follows that session's folder
-cmd A "/new $OTHER kestrel"; wait_for A "kestrel options" 30; sleep 1
+mark; cmd A "/new $OTHER kestrel"; wait_for A "kestrel options" 30; sleep 1
 mention A "harbor-chart" c3-other-folder
 expect C3a c3-other-folder "harbor-chart-in-other-host-folder.md" "search follows the foreground session's folder"
 expect_not C3b c3-other-folder "harbor-chart-on-host.md|harbor-chart-on-client.md" "other folders are not mixed in"

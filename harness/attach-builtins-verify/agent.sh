@@ -30,17 +30,18 @@ grep -q "^$K1 *lark" "$SC/a3-host-ls.txt" && check A3a PASS "unprompted session 
 [ "$(count)" = 2 ] && check A3b PASS "in-place change created no extra session" || check A3b FAIL "session count $(count), expected 2"
 cmd A "status"; wait_for A "Lark turn 1" 20; snap A a3-reply
 expect A3c a3-reply "Lark turn 1" "the next prompt reaches Lark, not Kestrel"
+cmd A "tidepool marker"; wait_for A "Lark read: tidepool marker" 20
 expect A3d a3-reply "controlling .* lark .* ready" "controller footer names the new agent after the in-place change"
 typed A "/mod"; sleep 0.8; snap A a3-controller-slash; k A C-u
-expect A3e a3-controller-slash "/model .*current: lark" "controller slash menu names the new agent"
+expect A3e a3-controller-slash "/model .*current: [Ll]ark" "controller slash menu names the new agent"
 sleep 1; snap B a5-watcher-after
 expect_not A5a a5-watcher-after "Session ended" "watcher keeps the session after the in-place change"
-expect A5b a5-watcher-after "Lark turn 1" "watcher sees the new agent's reply"
+expect A5b a5-watcher-after "Lark read: tidepool marker" "watcher sees the new agent's reply"
 typed B "/age"; sleep 0.8; snap B a5-watcher-slash; k B C-u
 expect A5c a5-watcher-slash "/agent .*watching" "watcher's /agent is greyed with the take-control hint"
 term C "${K1:0:8}"; sleep 5; snap C a7-late-attach
 expect_not A7a a7-late-attach "Session ended" "a later attach opens the in-place-changed session"
-expect A7b a7-late-attach "now runs Lark" "a later attach by ID opens the in-place-changed session itself"
+expect A7b a7-late-attach "tidepool marker" "a later attach by ID opens the in-place-changed session itself"
 
 # Prompted session: the new agent starts beside it.
 mark; cmd A "/new kestrel"; wait_for A "kestrel options" 30; sleep 1; K2=$(new_sid)

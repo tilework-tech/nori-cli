@@ -44,7 +44,7 @@ expect R2d r2-late-attach "now runs Moss" "later attach by ID opens the replaced
 # Reach the replaced session through the list instead, so R2 is judged on the right session.
 k F M-s; wait_for F "Sessions" 10; down_to F "moss"; k F Enter; sleep 2; snap F r2-list-open
 cmd F "/model"; sleep 1.5; snap F r2-list-model; closed F
-expect R2e r2-list-open "now runs Moss" "list opens the replaced session"
+expect R2e r2-list-open "controlling .* moss .* ready" "list opens the replaced session"
 expect_not R2f r2-list-model "[0-9]\\. harbor" "replaced session (via list) offers no previous-agent models"
 k F M-s; sleep 1.5; snap F r2-list-row; k F Escape
 expect_not R2c r2-late-model "[0-9]\. harbor" "later attach does not offer the replaced agent's models"

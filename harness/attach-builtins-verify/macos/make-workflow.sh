@@ -37,6 +37,7 @@ jobs:
         run: |
           mkdir -p "\$RUNNER_TEMP/mac" target/mock-acp-out
           cargo +nightly build -p mock-acp-agent --profile ci-test --target aarch64-apple-darwin --artifact-dir target/mock-acp-out -Z unstable-options
+          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target aarch64-apple-darwin
           export MOCK_ACP_AGENT_BIN="\$GITHUB_WORKSPACE/nori-rs/target/mock-acp-out/mock_acp_agent"$SEDS
           for round in 1 2; do cargo test --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --no-fail-fast$TESTS > "\$RUNNER_TEMP/mac/pty-round-\$round.log" 2>&1 || true; grep -E "^test .* (ok|FAILED)\$|^test result" "\$RUNNER_TEMP/mac/pty-round-\$round.log" | sed "s/^/round \$round: /"; done | tee "\$RUNNER_TEMP/mac/pty-rounds.txt"
           git checkout -- tui-pty-e2e/tests

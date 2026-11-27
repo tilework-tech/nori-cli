@@ -10,4 +10,11 @@ cmd A "/new"; wait_for A "kestrel options" 30; sleep 1
 typed A "@harbor-chart"; sleep 2; snap A g-at-session; k A C-u; k A Escape; sleep 0.3; k A C-u
 cmd A "/model"; sleep 1.5; snap A g-model-session; k A Escape; sleep 0.3; k A C-u
 cmd A "status"; wait_for A "Kestrel turn" 20; snap A g-prompt-delivered
+expect G1 g-prompt-delivered "Kestrel turn 1" "prompt is delivered across versions"
+expect_not G2 g-at-no-session "harbor-chart-on-client.md" "no-session @ never lists the attaching folder"
+if [ -n "$GATED" ]; then
+  for c in age:agent mod:model con:config men:mention; do
+    expect "G3-${c#*:}" "g-slash-${c%%:*}" "/${c#*:} .*not available on this host yet" "/${c#*:} greyed for an older host"; done
+  expect_not G4 g-agents-no-session "No session is open" "/agents is not sent as a prompt"
+fi
 teardown

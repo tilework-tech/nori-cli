@@ -12,7 +12,7 @@ setup_host() { # setup_host NAME DEFAULT_AGENT
   CLIENT=$ROOT/client; FOLDER=$ROOT/client-folder; OTHER=$ROOT/host-other
   mkdir -p "$HOSTHOME" "$PROJECT" "$CLIENT" "$FOLDER" "$OTHER"
   export QUILL_CTL=$ROOT
-  { printf 'agent = "%s"\n' "$2"
+  { printf 'agent = "%s"\ncheck_for_update_on_startup = false\n' "$2"
     for d in "$PROJECT" "$OTHER" "$FOLDER"; do printf '[projects."%s"]\ntrust_level = "trusted"\n' "$d"; done
     for a in Kestrel Lark; do
       printf '[[agents]]\nname = "%s"\nslug = "%s"\n[agents.distribution.local]\ncommand = "python3"\nargs = ["%s", "%s"]\n' "$a" "$(printf %s "$a" | tr A-Z a-z)" "$QUILL" "$a"
@@ -23,7 +23,7 @@ setup_host() { # setup_host NAME DEFAULT_AGENT
     printf '[[agents]]\nname = "Cedar"\nslug = "cedar"\n[agents.distribution.local]\ncommand = "cedar-adapter-not-installed"\n'
   } > "$HOSTHOME/config.toml"
   # The client shares nothing with the host: its own default and one local-only agent.
-  { printf 'agent = "wren"\n[projects."%s"]\ntrust_level = "trusted"\n' "$FOLDER"
+  { printf 'agent = "wren"\ncheck_for_update_on_startup = false\n[projects."%s"]\ntrust_level = "trusted"\n' "$FOLDER"
     printf '[[agents]]\nname = "Wren"\nslug = "wren"\n[agents.distribution.local]\ncommand = "python3"\nargs = ["%s", "Wren"]\n' "$QUILL"
   } > "$CLIENT/config.toml"
   echo "synthetic tide table" > "$PROJECT/harbor-chart-on-host.md"
