@@ -22,8 +22,12 @@ pub enum SessionEvent {
 }
 
 /// Raw ACP traffic emitted by the agent toward its client.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "message_type", rename_all = "snake_case")]
+///
+/// On the wire a response to `session/set_config_option`, `session/load` or
+/// `session/resume` also names that `method`. ACP's untagged `AgentResponse`
+/// cannot tell those three apart when they carry nothing but options, and a
+/// load or resume must never read back as a write.
+#[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum AcpEvent {
     Notification(acp::v1::AgentNotification),
@@ -33,45 +37,255 @@ pub enum AcpEvent {
     },
     Response {
         request_id: RequestId,
-        #[serde(deserialize_with = "deserialize_agent_response")]
+        response: Result<acp::v1::AgentResponse, acp::v1::Error>,
+    },
+    /// The options a response reported, read from a journal written before
+    /// responses named their method. It may answer a load, a resume or a
+    /// set, so it says only what the session's options were. It is written
+    /// back as the response it was read from.
+    ConfigSnapshot {
+        request_id: RequestId,
+        config_options: Vec<acp::v1::SessionConfigOption>,
+        meta: Option<serde_json::Map<String, serde_json::Value>>,
+    },
+}
+
+/// The request a response answers, named on the wire for the responses
+/// ACP's untagged `AgentResponse` cannot tell apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum ResponseMethod {
+    #[serde(rename = "session/set_config_option")]
+    SetConfigOption,
+    #[serde(rename = "session/load")]
+    Load,
+    #[serde(rename = "session/resume")]
+    Resume,
+}
+
+/// The method a response names on the wire, for the responses that need one.
+fn method_of(response: &acp::v1::AgentResponse) -> Option<ResponseMethod> {
+    match response {
+        acp::v1::AgentResponse::SetSessionConfigOptionResponse(_) => {
+            Some(ResponseMethod::SetConfigOption)
+        }
+        acp::v1::AgentResponse::LoadSessionResponse(_) => Some(ResponseMethod::Load),
+        acp::v1::AgentResponse::ResumeSessionResponse(_) => Some(ResponseMethod::Resume),
+        _ => None,
+    }
+}
+
+// The wire form of `AcpEvent`, which its schema describes.
+/// Raw ACP traffic emitted by the agent toward its client.
+#[derive(JsonSchema)]
+#[serde(tag = "message_type", rename_all = "snake_case")]
+#[allow(dead_code, clippy::large_enum_variant)]
+enum AcpEventSchema {
+    Notification(acp::v1::AgentNotification),
+    Request {
+        request_id: RequestId,
+        request: acp::v1::AgentRequest,
+    },
+    Response {
+        request_id: RequestId,
+        /// Set for responses to `session/set_config_option`, `session/load`
+        /// and `session/resume`, whose results can otherwise look alike.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        method: Option<ResponseMethod>,
         response: Result<acp::v1::AgentResponse, acp::v1::Error>,
     },
 }
 
-/// ACP's untagged `AgentResponse` lets the all-optional
-/// `AuthenticateResponse` absorb any payload, so a prompt response read back
-/// from the wire is recognised by its required `stopReason`, and a
-/// `session/set_config_option` answer by carrying nothing but its required
-/// `configOptions` (and `_meta`).
-fn deserialize_agent_response<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Result<acp::v1::AgentResponse, acp::v1::Error>, D::Error> {
-    use serde::de::Error as _;
-    match Result::<serde_json::Value, acp::v1::Error>::deserialize(deserializer)? {
-        Err(error) => Ok(Err(error)),
-        Ok(payload) if payload.get("stopReason").is_some() => serde_json::from_value(payload)
-            .map(|response| Ok(acp::v1::AgentResponse::PromptResponse(response)))
-            .map_err(D::Error::custom),
-        Ok(payload)
-            if payload.get("configOptions").is_some()
-                && payload.as_object().is_some_and(|fields| {
-                    fields
-                        .keys()
-                        .all(|key| key == "configOptions" || key == "_meta")
-                }) =>
-        {
-            serde_json::from_value(payload)
-                .map(|response| {
-                    Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(
-                        response,
-                    ))
-                })
-                .map_err(D::Error::custom)
-        }
-        Ok(payload) => serde_json::from_value(payload)
-            .map(Ok)
-            .map_err(D::Error::custom),
+impl JsonSchema for AcpEvent {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "AcpEvent".into()
     }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        AcpEventSchema::json_schema(generator)
+    }
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum WirePayload<'a> {
+    Answer(&'a acp::v1::AgentResponse),
+    Snapshot {
+        #[serde(rename = "configOptions")]
+        config_options: &'a [acp::v1::SessionConfigOption],
+        #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+        meta: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "message_type", rename_all = "snake_case")]
+enum WireOut<'a> {
+    Notification(&'a acp::v1::AgentNotification),
+    Request {
+        request_id: &'a RequestId,
+        request: &'a acp::v1::AgentRequest,
+    },
+    Response {
+        request_id: &'a RequestId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        method: Option<ResponseMethod>,
+        response: Result<WirePayload<'a>, &'a acp::v1::Error>,
+    },
+}
+
+impl Serialize for AcpEvent {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            AcpEvent::Notification(notification) => WireOut::Notification(notification),
+            AcpEvent::Request {
+                request_id,
+                request,
+            } => WireOut::Request {
+                request_id,
+                request,
+            },
+            AcpEvent::Response {
+                request_id,
+                response,
+            } => WireOut::Response {
+                request_id,
+                method: response.as_ref().ok().and_then(method_of),
+                response: response.as_ref().map(WirePayload::Answer),
+            },
+            AcpEvent::ConfigSnapshot {
+                request_id,
+                config_options,
+                meta,
+            } => WireOut::Response {
+                request_id,
+                method: None,
+                response: Ok(WirePayload::Snapshot {
+                    config_options,
+                    meta: meta.as_ref(),
+                }),
+            },
+        }
+        .serialize(serializer)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "message_type", rename_all = "snake_case")]
+enum WireIn {
+    Notification(acp::v1::AgentNotification),
+    Request {
+        request_id: RequestId,
+        request: acp::v1::AgentRequest,
+    },
+    Response {
+        request_id: RequestId,
+        #[serde(default)]
+        method: Option<String>,
+        response: Result<serde_json::Value, acp::v1::Error>,
+    },
+}
+
+impl<'de> Deserialize<'de> for AcpEvent {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+        Ok(match WireIn::deserialize(deserializer)? {
+            WireIn::Notification(notification) => AcpEvent::Notification(notification),
+            WireIn::Request {
+                request_id,
+                request,
+            } => AcpEvent::Request {
+                request_id,
+                request,
+            },
+            WireIn::Response {
+                request_id,
+                method: _,
+                response: Err(error),
+            } => AcpEvent::Response {
+                request_id,
+                response: Err(error),
+            },
+            WireIn::Response {
+                request_id,
+                method,
+                response: Ok(payload),
+            } => match read_answer(method.as_deref(), payload).map_err(D::Error::custom)? {
+                Answer::Typed(response) => AcpEvent::Response {
+                    request_id,
+                    response: Ok(response),
+                },
+                Answer::Snapshot {
+                    config_options,
+                    meta,
+                } => AcpEvent::ConfigSnapshot {
+                    request_id,
+                    config_options,
+                    meta,
+                },
+            },
+        })
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+enum Answer {
+    Typed(acp::v1::AgentResponse),
+    Snapshot {
+        config_options: Vec<acp::v1::SessionConfigOption>,
+        meta: Option<serde_json::Map<String, serde_json::Value>>,
+    },
+}
+
+/// One successful response as written. A named method decides its type. An
+/// unnamed one is recognised by a prompt's required `stopReason`, or, when
+/// it carries nothing but a list of options (and `_meta`), read as a
+/// snapshot of them. ACP's untagged `AgentResponse` would otherwise let the
+/// all-optional `AuthenticateResponse` absorb either.
+fn read_answer(method: Option<&str>, payload: serde_json::Value) -> serde_json::Result<Answer> {
+    use acp::v1::AgentResponse;
+    let named = method.and_then(|method| {
+        serde_json::from_value::<ResponseMethod>(serde_json::Value::from(method)).ok()
+    });
+    match named {
+        Some(ResponseMethod::SetConfigOption) => {
+            return serde_json::from_value(payload).map(|response| {
+                Answer::Typed(AgentResponse::SetSessionConfigOptionResponse(response))
+            });
+        }
+        Some(ResponseMethod::Load) => {
+            return serde_json::from_value(payload)
+                .map(|response| Answer::Typed(AgentResponse::LoadSessionResponse(response)));
+        }
+        Some(ResponseMethod::Resume) => {
+            return serde_json::from_value(payload)
+                .map(|response| Answer::Typed(AgentResponse::ResumeSessionResponse(response)));
+        }
+        None => {}
+    }
+    if payload.get("stopReason").is_some() {
+        return serde_json::from_value(payload)
+            .map(|response| Answer::Typed(AgentResponse::PromptResponse(response)));
+    }
+    let config_only = payload.as_object().is_some_and(|fields| {
+        fields
+            .get("configOptions")
+            .is_some_and(serde_json::Value::is_array)
+            && fields
+                .keys()
+                .all(|key| key == "configOptions" || key == "_meta")
+    });
+    if method.is_none() && config_only {
+        let config_options = serde_json::from_value(payload["configOptions"].clone())?;
+        let meta = match payload.get("_meta") {
+            None | Some(serde_json::Value::Null) => None,
+            Some(meta) => Some(serde_json::from_value(meta.clone())?),
+        };
+        return Ok(Answer::Snapshot {
+            config_options,
+            meta,
+        });
+    }
+    serde_json::from_value(payload).map(Answer::Typed)
 }
 
 /// Notifications owned by the Nori harness rather than ACP.
@@ -510,6 +724,169 @@ mod response_wire_tests {
             ),
             "{received:?}"
         );
+    }
+
+    fn synthetic_option(current: &str) -> acp::v1::SessionConfigOption {
+        acp::v1::SessionConfigOption::select(
+            "model",
+            "Model",
+            current.to_string(),
+            vec![acp::v1::SessionConfigSelectOption::new(
+                current.to_string(),
+                "Synthetic",
+            )],
+        )
+        .category(acp::v1::SessionConfigOptionCategory::Model)
+    }
+
+    /// Load, resume and set answers that carry nothing but options, with
+    /// zero or one option and with or without `_meta`.
+    fn config_only_answers() -> Vec<(&'static str, acp::v1::AgentResponse)> {
+        let mut answers = Vec::new();
+        for options in [vec![], vec![synthetic_option("synthetic-swift")]] {
+            for meta in [
+                None,
+                Some(serde_json::Map::from_iter([(
+                    "synthetic".to_string(),
+                    serde_json::json!(true),
+                )])),
+            ] {
+                answers.push((
+                    "load",
+                    acp::v1::AgentResponse::LoadSessionResponse(
+                        acp::v1::LoadSessionResponse::new()
+                            .config_options(options.clone())
+                            .meta(meta.clone()),
+                    ),
+                ));
+                answers.push((
+                    "resume",
+                    acp::v1::AgentResponse::ResumeSessionResponse(
+                        acp::v1::ResumeSessionResponse::new()
+                            .config_options(options.clone())
+                            .meta(meta.clone()),
+                    ),
+                ));
+                answers.push((
+                    "set",
+                    acp::v1::AgentResponse::SetSessionConfigOptionResponse(
+                        acp::v1::SetSessionConfigOptionResponse::new(options.clone())
+                            .meta(meta.clone()),
+                    ),
+                ));
+            }
+        }
+        answers
+    }
+
+    fn kind(event: &AcpEvent) -> &'static str {
+        match event {
+            AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::LoadSessionResponse(_)),
+                ..
+            } => "load",
+            AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::ResumeSessionResponse(_)),
+                ..
+            } => "resume",
+            AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(_)),
+                ..
+            } => "set",
+            _ => "other",
+        }
+    }
+
+    #[test]
+    fn load_resume_and_set_answers_keep_their_request_across_the_wire() {
+        for (sent_kind, response) in config_only_answers() {
+            let sent = AcpEvent::Response {
+                request_id: RequestId::Number(7),
+                response: Ok(response),
+            };
+            let wire = serde_json::to_value(&sent).unwrap();
+            assert_eq!(kind(&round_trip(&sent)), sent_kind, "{wire}");
+        }
+    }
+
+    /// A journal written before answers named their request.
+    fn untagged(result: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "message_type": "response",
+            "request_id": 7,
+            "response": {"Ok": result},
+        })
+    }
+
+    #[test]
+    fn an_untagged_config_payload_is_never_read_as_a_write() {
+        for result in [
+            serde_json::json!({"configOptions": []}),
+            serde_json::json!({"configOptions": [synthetic_option("synthetic-swift")]}),
+            serde_json::json!({"configOptions": null}),
+            serde_json::json!({}),
+        ] {
+            let received: AcpEvent = serde_json::from_value(untagged(result.clone())).unwrap();
+            assert_ne!(kind(&received), "set", "{result}");
+        }
+    }
+
+    #[test]
+    fn an_untagged_list_of_options_reads_as_a_snapshot_and_writes_back_unchanged() {
+        for result in [
+            serde_json::json!({"configOptions": []}),
+            serde_json::json!({"configOptions": [synthetic_option("synthetic-swift")]}),
+            serde_json::json!({"configOptions": [], "_meta": {"synthetic": true}}),
+            serde_json::json!({"configOptions": [], "_meta": null}),
+        ] {
+            let record = untagged(result.clone());
+            let received: AcpEvent = serde_json::from_value(record.clone()).unwrap();
+            let AcpEvent::ConfigSnapshot { config_options, .. } = &received else {
+                panic!("{result} is a snapshot: {received:?}");
+            };
+            assert_eq!(
+                serde_json::to_value(config_options).unwrap(),
+                result["configOptions"]
+            );
+            if result.get("_meta") != Some(&serde_json::Value::Null) {
+                assert_eq!(serde_json::to_value(&received).unwrap(), record);
+            }
+        }
+    }
+
+    #[test]
+    fn untagged_answers_without_a_list_of_options_are_not_snapshots() {
+        for result in [
+            serde_json::json!({"configOptions": null}),
+            serde_json::json!({}),
+            serde_json::json!({"configOptions": [], "modes": null}),
+        ] {
+            let received: AcpEvent = serde_json::from_value(untagged(result.clone())).unwrap();
+            assert!(
+                matches!(
+                    received,
+                    AcpEvent::Response {
+                        response: Ok(_),
+                        ..
+                    }
+                ),
+                "{result}: {received:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_answer_naming_an_unknown_method_reads_as_an_untagged_one() {
+        let mut record = untagged(serde_json::json!({"stopReason": "end_turn"}));
+        record["method"] = serde_json::json!("session/synthetic");
+        let received: AcpEvent = serde_json::from_value(record).unwrap();
+        assert!(matches!(
+            received,
+            AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::PromptResponse(_)),
+                ..
+            }
+        ));
     }
 
     #[test]

@@ -114,6 +114,9 @@ for line in sys.stdin:
         modes[sid] = mode_ids[0]
         models[sid] = "initial" if config_only else name
         efforts[sid] = "low"
+        if Path(f"fixture-no-options-{name}").exists():
+            send(id=rid, result={"sessionId": sid})
+            continue
         if config_only:
             send(id=rid, result={"sessionId": sid, "configOptions": session_options(sid)})
             continue

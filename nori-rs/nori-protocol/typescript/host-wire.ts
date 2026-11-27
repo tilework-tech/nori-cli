@@ -292,6 +292,11 @@ export type AcpEvent =
     }
   | {
       message_type: "response";
+      /**
+       * Set for responses to `session/set_config_option`, `session/load`
+       * and `session/resume`, whose results can otherwise look alike.
+       */
+      method?: ResponseMethod | null;
       request_id: RequestId;
       response: ResultOf_AgentResponseOr_Error;
     };
@@ -346,6 +351,11 @@ export type ElicitationUrlMode = (ElicitationSessionScope1 | ElicitationRequestS
  * \[2\] Fractional parts may be problematic, since many decimal fractions cannot be represented exactly as binary fractions.
  */
 export type RequestId = null | number | string;
+/**
+ * The request a response answers, named on the wire for the responses
+ * ACP's untagged `AgentResponse` cannot tell apart.
+ */
+export type ResponseMethod = "session/set_config_option" | "session/load" | "session/resume";
 export type ResultOf_AgentResponseOr_Error =
   | {
       /**

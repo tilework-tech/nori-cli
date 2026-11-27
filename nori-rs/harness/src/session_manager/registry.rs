@@ -486,7 +486,11 @@ impl Registry {
                     }
                 }
             }
-            SessionEvent::Acp(AcpEvent::Request { .. } | AcpEvent::Response { .. })
+            SessionEvent::Acp(
+                AcpEvent::Request { .. }
+                | AcpEvent::Response { .. }
+                | AcpEvent::ConfigSnapshot { .. },
+            )
             | SessionEvent::Acp(AcpEvent::Notification(_))
             | SessionEvent::Nori(_) => {}
         }

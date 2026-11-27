@@ -62,12 +62,16 @@ types through `nori_protocol::acp`.
   event with no gaps. A fork starts a new conversation and a new sequence.
 - `SessionEnvelope.conversation_id` is the conversation ID, never an ACP
   session ID.
-- `AcpEvent::Response` decodes a payload that carries `stopReason` as a
-  `PromptResponse`, and one with only `configOptions` (and `_meta`) as a
-  `SetSessionConfigOptionResponse`. ACP's `AgentResponse` is untagged, and the
-  all-optional `AuthenticateResponse` would otherwise absorb any payload, so a
-  client reading envelopes back from the wire would never see its turn end or
-  a session's changed options.
+- ACP's `AgentResponse` is untagged: config-only answers to
+  `session/set_config_option`, `session/load` and `session/resume` serialize
+  identically, and the all-optional `AuthenticateResponse` would absorb any
+  payload. So `AcpEvent` has hand-written serde. A `Response` to one of those
+  three methods carries a sibling `method` field, and decoding uses it; older
+  readers ignore it. Without `method`, a payload with `stopReason` decodes as
+  a `PromptResponse`, and one with only an array `configOptions` (and
+  `_meta`) as `AcpEvent::ConfigSnapshot`, which asserts no request (journals
+  written before responses named their method) and serializes back as the
+  untagged response. Anything else takes the generic untagged decode.
 - `SessionStatus::is_closed()` is true for both `Closed` and `Done`. Code that
   checks only `Closed` misses finished delegated children.
 - `HOST_CONTRACT` is the host wire version. The bump rule and the

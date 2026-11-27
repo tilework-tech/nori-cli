@@ -9,8 +9,11 @@
 //! (`/approvals`). Neither is offered here. Models that need the agent
 //! restarted on this machine are not offered either.
 //!
-//! The host journals the agent's answer to every change, so a terminal that
-//! watches the session or joins it later adopts the same configuration.
+//! The host journals the agent's answer to every change, load and resume,
+//! with the agent's complete options. A terminal adopts those as they are,
+//! so a watcher or a terminal that joins later shows the same configuration,
+//! the agent's own mode included. The host's answer to a change made here
+//! leaves that mode out, so it updates only what it reports.
 
 use nori_protocol::acp::v1 as acp;
 
@@ -136,11 +139,28 @@ impl ChatWidget {
         });
     }
 
-    /// Some client changed one of this session's options on the host,
-    /// which journaled the agent's answer. Joining later or watching, this
-    /// is how the session's current configuration arrives.
-    pub(super) fn adopt_host_config_answer(&mut self, reported: Vec<acp::SessionConfigOption>) {
+    /// The agent's own answer with the session's complete options, read
+    /// from the host's journal: whichever client changed them, loaded or
+    /// resumed the session, a watcher and a terminal that attaches later
+    /// show what the agent reported, the agent's own mode included.
+    pub(super) fn adopt_journaled_options(&mut self, options: &[acp::SessionConfigOption]) {
+        self.sync_acp_session_config_snapshot(options);
+    }
+
+    /// The host's answer to a change made here. The host leaves out the
+    /// agent's own mode, which keeps the value the journal last reported.
+    fn adopt_host_receipt(&mut self, reported: Vec<acp::SessionConfigOption>) {
         let options = merge(self.agent_config().raw_options(), reported);
+        self.sync_acp_session_config_snapshot(&options);
+    }
+
+    /// The host's answer to an in-place agent change: the new agent's
+    /// options replace the previous agent's, its mode included.
+    pub(super) fn adopt_replacement_receipt(&mut self, reported: Vec<acp::SessionConfigOption>) {
+        let options: Vec<acp::SessionConfigOption> = reported
+            .into_iter()
+            .filter(|option| !host_owned(option))
+            .collect();
         self.sync_acp_session_config_snapshot(&options);
     }
 
@@ -154,7 +174,7 @@ impl ChatWidget {
     ) {
         match result {
             Ok(reported) => {
-                self.adopt_host_config_answer(reported);
+                self.adopt_host_receipt(reported);
                 self.add_acp_session_config_set_message(&option_name, &value_name, false);
                 if self.foreground {
                     self.open_joined_config_popup(Some(config_id));

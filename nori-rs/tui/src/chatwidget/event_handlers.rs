@@ -159,10 +159,35 @@ impl ChatWidget {
                     Ok(nori_protocol::acp::v1::AgentResponse::SetSessionConfigOptionResponse(response)),
                 ..
             } if self.host_connection.is_some() => {
-                self.adopt_host_config_answer(response.config_options);
+                self.adopt_journaled_options(&response.config_options);
+            }
+            nori_protocol::AcpEvent::Response {
+                response:
+                    Ok(
+                        nori_protocol::acp::v1::AgentResponse::LoadSessionResponse(
+                            nori_protocol::acp::v1::LoadSessionResponse {
+                                config_options: Some(options),
+                                ..
+                            },
+                        )
+                        | nori_protocol::acp::v1::AgentResponse::ResumeSessionResponse(
+                            nori_protocol::acp::v1::ResumeSessionResponse {
+                                config_options: Some(options),
+                                ..
+                            },
+                        ),
+                    ),
+                ..
+            }
+            | nori_protocol::AcpEvent::ConfigSnapshot {
+                config_options: options,
+                ..
+            } if self.host_connection.is_some() => {
+                self.adopt_journaled_options(&options);
             }
             nori_protocol::AcpEvent::Request { .. }
             | nori_protocol::AcpEvent::Response { .. }
+            | nori_protocol::AcpEvent::ConfigSnapshot { .. }
             | nori_protocol::AcpEvent::Notification(_) => {}
         }
     }
@@ -497,6 +522,14 @@ impl ChatWidget {
         // startup it cannot gain the model after the fact, because history is
         // committed to the scrollback as it is written, so announce the
         // resolved configuration on its own line instead.
+        // A joined session that starts again under its ID with an agent
+        // that advertises nothing keeps none of the previous agent's options.
+        if event.config_options.is_empty()
+            && self.host_connection.is_some()
+            && !self.agent_config().is_empty()
+        {
+            self.sync_acp_session_config_snapshot(&[]);
+        }
         if !event.config_options.is_empty() {
             if self.show_welcome_banner {
                 self.sync_acp_session_config_snapshot(&event.config_options);

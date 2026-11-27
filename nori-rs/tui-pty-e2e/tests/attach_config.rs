@@ -273,3 +273,86 @@ fn a_terminal_that_attaches_later_sees_the_confirmed_model() {
     wait_for_picker(tui, "Model");
     assert_eq!(picker_rows(tui, "Model"), ["Initial", "Amber (current)"]);
 }
+
+/// Change the model of the session on screen to Amber, then change the
+/// session's agent in place to Birch, which advertises no options.
+fn replace_after_a_model_change(host: &AgentHost, tui: &mut TuiSession) {
+    close_list(tui);
+    new_session(host, tui, 1);
+    ask(tui, "/model");
+    pick(tui, "Model", "Amber");
+    tui.wait_for_text("option set: Model=Amber", TIMEOUT)
+        .unwrap();
+    close_panel(tui);
+    ask(tui, "/agent");
+    tui.wait_for_text("Choose an agent", TIMEOUT).unwrap();
+    assert!(focus(tui, "Choose an agent", "Birch"));
+    tui.send_key(Key::Enter).unwrap();
+    tui.wait_for_text("This session now runs Birch.", TIMEOUT)
+        .unwrap();
+}
+
+const NO_MODEL: &str = "This agent has no model selector";
+
+#[test]
+fn an_agent_replaced_by_one_without_options_leaves_no_model_behind() {
+    let gates = [GATES, &["fixture-no-options-birch"]].concat();
+    let host = AgentHost::new(&gates);
+    host.start();
+    let mut first = host.attach();
+    replace_after_a_model_change(&host, &mut first.terminal);
+    tui_shows_no_model(&mut first.terminal);
+    drop(first);
+
+    let mut later = host.attach();
+    let tui = &mut later.terminal;
+    assert!(focus(tui, "Sessions", "new session"));
+    tui.send_key(Key::Enter).unwrap();
+    tui.wait_for_text("birch · ready", TIMEOUT).unwrap();
+    tui_shows_no_model(tui);
+}
+
+fn tui_shows_no_model(tui: &mut TuiSession) {
+    ask(tui, "/model");
+    tui.wait_for_text(NO_MODEL, TIMEOUT)
+        .expect("no model is left from the previous agent");
+    tui.press(
+        Key::Escape,
+        |screen| !screen.contains(NO_MODEL),
+        "the model message closes",
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_watcher_adopts_the_controllers_confirmed_model() {
+    let host = AgentHost::new(GATES);
+    host.start();
+    let mut controller = host.attach();
+    let tui = &mut controller.terminal;
+    close_list(tui);
+    new_session(&host, tui, 1);
+    let mut watcher = host.attach();
+    assert!(focus(&mut watcher.terminal, "Sessions", "new session"));
+    watcher.terminal.send_key(Key::Enter).unwrap();
+    watcher.terminal.wait_for_text("watching", TIMEOUT).unwrap();
+
+    ask(tui, "/model");
+    pick(tui, "Model", "Amber");
+    tui.wait_for_text("option set: Model=Amber", TIMEOUT)
+        .unwrap();
+
+    close_panel(tui);
+    let watcher = &mut watcher.terminal;
+    watcher.settle(PAUSE);
+    watcher.send_key(Key::Alt('t')).unwrap();
+    watcher.wait_for_text("controlling", TIMEOUT).unwrap();
+    watcher.settle(PAUSE);
+    ask(watcher, "/model");
+    wait_for_picker(watcher, "Model");
+    assert_eq!(
+        picker_rows(watcher, "Model"),
+        ["Initial", "Amber (current)"],
+        "the former watcher shows the model it saw confirmed"
+    );
+}

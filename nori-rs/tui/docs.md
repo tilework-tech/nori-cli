@@ -131,9 +131,13 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   models. A choice is `HostCall::SetConfigOption`; only the host's answer
   (`AppEvent::HostSessionConfigSet`, routed to the widget of the session it
   was made in) merges the reported options over the last ones, keeping adapter
-  mode options the host omits. Joined widgets also adopt journaled
-  `SetSessionConfigOptionResponse`s silently, so watchers and late joiners see
-  the current configuration. Nothing is written to `[default_models]`.
+  mode options the host omits. Joined widgets also silently adopt journaled
+  set answers, load/resume answers that report options (even empty), and
+  `ConfigSnapshot`s as they are, replacing the options, so watchers and late
+  joiners see the agent's own mode changes and removals. An in-place agent
+  change's receipt replaces the options, and a joined `SessionStarted` with
+  no options clears the previous agent's. Nothing is written to
+  `[default_models]`.
   A refused builtin command stays in the composer as `/command`; a command
   the composer does not know goes to the agent as a prompt. With no session
   on screen, `@` asks a joined host that serves `find_paths` to search its own

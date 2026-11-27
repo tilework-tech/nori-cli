@@ -166,7 +166,7 @@ impl ChatWidget {
         options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
     ) {
         self.agent_change = AgentChange::None;
-        self.adopt_host_config_answer(options);
+        self.adopt_replacement_receipt(options);
         self.config.active_agent.clone_from(&slug);
         self.config.agent = slug;
         self.bottom_pane.set_agent_display_name(name.clone());
