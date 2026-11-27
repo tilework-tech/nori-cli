@@ -258,3 +258,51 @@ fn an_untagged_config_answer_from_an_older_journal_is_shown_as_a_snapshot() {
         assert_eq!(shown(&chat), expected, "{result}");
     }
 }
+
+fn effort(current: &str) -> acp::SessionConfigOption {
+    select(
+        "effort",
+        "Effort",
+        acp::SessionConfigOptionCategory::ThoughtLevel,
+        &[current, "high"],
+    )
+}
+
+/// The host's answer to changing the session's agent in place: the host's
+/// own agent and mode around the new agent's options, which leave out the
+/// agent's own mode.
+fn replacement_receipt(chat: &mut ChatWidget) {
+    chat.on_host_agent_replaced("cedar".to_string(), "Cedar".to_string());
+}
+
+/// Each order a controller can see an in-place agent change arrive in: the
+/// new agent's startup from the journal, and the host's answer.
+fn both_orders(new_agent: Vec<acp::SessionConfigOption>) -> [Vec<(String, String)>; 2] {
+    let mut startup_first = started_with(vec![model("initial"), permission("explore")]);
+    feed(&mut startup_first, started(new_agent.clone()));
+    replacement_receipt(&mut startup_first);
+
+    let mut receipt_first = started_with(vec![model("initial"), permission("explore")]);
+    replacement_receipt(&mut receipt_first);
+    feed(&mut receipt_first, started(new_agent));
+
+    [shown(&startup_first), shown(&receipt_first)]
+}
+
+#[test]
+fn the_new_agents_own_mode_survives_an_in_place_change_in_either_order() {
+    let expected = pairs(&[
+        ("model", "cedar"),
+        ("effort", "low"),
+        ("permission", "edit"),
+    ]);
+    assert_eq!(
+        both_orders(vec![model("cedar"), effort("low"), permission("edit")]),
+        [expected.clone(), expected]
+    );
+}
+
+#[test]
+fn a_new_agent_without_options_leaves_none_in_either_order() {
+    assert_eq!(both_orders(Vec::new()), [Vec::new(), Vec::new()]);
+}

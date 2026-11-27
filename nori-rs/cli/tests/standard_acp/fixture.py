@@ -20,6 +20,9 @@ leases = []
 sessions = set()
 mode_file = Path("fixture-modes")
 mode_ids = mode_file.read_text().split() if mode_file.exists() else ["explore"]
+# One agent can start in its own modes, the first of them current.
+if Path(f"fixture-modes-{name}").exists():
+    mode_ids = Path(f"fixture-modes-{name}").read_text().split()
 modes = {}
 models = {}
 config_only = Path("fixture-config-options-only").exists()

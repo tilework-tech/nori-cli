@@ -119,11 +119,10 @@ impl ChatWidget {
                 });
                 tokio::spawn(async move {
                     match reply.await {
-                        Ok(result) => tx.send(AppEvent::HostAgentReplaced {
+                        Ok(_) => tx.send(AppEvent::HostAgentReplaced {
                             session_id: id,
                             slug,
                             name,
-                            options: super::host_config::reported_options(&result),
                         }),
                         Err(error) => tx.send(AppEvent::HostAgentNotReplaced {
                             session_id: id,
@@ -158,15 +157,12 @@ impl ChatWidget {
         }
     }
 
-    /// The host changed this session's agent in place.
-    pub(crate) fn on_host_agent_replaced(
-        &mut self,
-        slug: String,
-        name: String,
-        options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
-    ) {
+    /// The host changed this session's agent in place. Its answer names
+    /// the agent but leaves out the agent's own mode, so the new agent's
+    /// startup in the journal, which may arrive before or after it, sets the
+    /// session's options.
+    pub(crate) fn on_host_agent_replaced(&mut self, slug: String, name: String) {
         self.agent_change = AgentChange::None;
-        self.adopt_replacement_receipt(options);
         self.config.active_agent.clone_from(&slug);
         self.config.agent = slug;
         self.bottom_pane.set_agent_display_name(name.clone());

@@ -154,16 +154,6 @@ impl ChatWidget {
         self.sync_acp_session_config_snapshot(&options);
     }
 
-    /// The host's answer to an in-place agent change: the new agent's
-    /// options replace the previous agent's, its mode included.
-    pub(super) fn adopt_replacement_receipt(&mut self, reported: Vec<acp::SessionConfigOption>) {
-        let options: Vec<acp::SessionConfigOption> = reported
-            .into_iter()
-            .filter(|option| !host_owned(option))
-            .collect();
-        self.sync_acp_session_config_snapshot(&options);
-    }
-
     /// The host answered a choice made in this session.
     pub(crate) fn on_host_session_config_set(
         &mut self,

@@ -356,3 +356,36 @@ fn a_watcher_adopts_the_controllers_confirmed_model() {
         "the former watcher shows the model it saw confirmed"
     );
 }
+
+#[test]
+fn the_controller_keeps_the_new_agents_own_mode_after_an_in_place_change() {
+    let host = AgentHost::new(GATES);
+    std::fs::write(host.project().join("fixture-modes-birch"), "edit explore").unwrap();
+    host.start();
+    let mut first = host.attach();
+    let tui = &mut first.terminal;
+    close_list(tui);
+    new_session(&host, tui, 1);
+    tui.wait_for_text("[ Explore ]", TIMEOUT).unwrap();
+    ask(tui, "/agent");
+    tui.wait_for_text("Choose an agent", TIMEOUT).unwrap();
+    assert!(focus(tui, "Choose an agent", "Birch"));
+    tui.send_key(Key::Enter).unwrap();
+    tui.wait_for_text("This session now runs Birch.", TIMEOUT)
+        .unwrap();
+    tui.wait_for_text("Permission=Edit", TIMEOUT).unwrap();
+    tui.settle(PAUSE * 2);
+    assert!(
+        tui.screen_contents().contains("[ Edit ]"),
+        "the controller shows Birch's own mode:\n{}",
+        tui.screen_contents()
+    );
+    drop(first);
+
+    let mut later = host.attach();
+    let tui = &mut later.terminal;
+    assert!(focus(tui, "Sessions", "new session"));
+    tui.send_key(Key::Enter).unwrap();
+    tui.wait_for_text("[ Edit ]", TIMEOUT)
+        .expect("a later attach shows Birch's own mode too");
+}

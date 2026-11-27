@@ -143,8 +143,6 @@ pub(crate) enum AppEvent {
         session_id: nori_harness::ConversationId,
         slug: String,
         name: String,
-        /// The session's options for the new agent, as the host reported them.
-        options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
     },
 
     /// A joined host's folders for the `/new` Tab typed in `generation`'s

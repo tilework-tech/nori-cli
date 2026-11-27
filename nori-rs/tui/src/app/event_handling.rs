@@ -226,9 +226,8 @@ impl App {
                 session_id,
                 slug,
                 name,
-                options,
             } => self.with_joined_widget(session_id, |widget| {
-                widget.on_host_agent_replaced(slug, name, options);
+                widget.on_host_agent_replaced(slug, name);
             }),
             AppEvent::HostFoldersFound {
                 generation,
