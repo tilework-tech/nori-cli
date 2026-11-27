@@ -1,0 +1,36 @@
+shell$ nori host
+Host started (pid 43448)  ws://127.0.0.1:7420/acp
+Token: /tmp/hostaudit-r2/homes/host/host/token (owner-only)
+shell$ nori attach
+shell$ nori attach
+shell$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

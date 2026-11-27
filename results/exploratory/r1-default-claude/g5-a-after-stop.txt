@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› second session ping
+
+
+• claude-code heard: second session ping
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+
+› from B
+
+
+• claude-code heard: from B
+
+■ Lost the connection to the host (host connection closed). Reconnecting; your draft is kept.
+
+  3 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · @ files · RECONNECTING · app · claude-code · ready · Approvals: Agent · draft kept · ctrl+d detach

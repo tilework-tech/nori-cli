@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› second session ping
+
+
+• claude-code heard: second session ping
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+
+› from B
+
+
+• claude-code heard: from B
+
+  2 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

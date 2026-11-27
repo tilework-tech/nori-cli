@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› which agent
+
+
+• claude-code heard: which agent
+
+  3 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

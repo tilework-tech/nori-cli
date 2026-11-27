@@ -1,0 +1,36 @@
+shell$ nori
+  〉nori CLI v0.30.0-next.15
+
+  System       /tmp/hostaudit-r1/roots/alpha/app
+  Agent        Claude
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+                                                                                                         [ acceptEdits ]
+〉
+
+  / commands · ! shell · @ files · ? help
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

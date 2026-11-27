@@ -1,0 +1,36 @@
+shell$ nori
+  〉nori CLI v0.30.0-next.15
+
+  System       /tmp/hostaudit-r1/roots/alpha/app
+  Agent        Claude
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+  Select agent
+  Creates new conversation with selected agent (history not preserved)
+
+  ▏› 1. Lantern Claude (current)                                                                                     ▕
+  ▏     claude-code                                                                                                  ▕
+     2. Lantern Codex
+        codex
+     3. Antigravity
+        Google
+     4. Grok Build
+        xAI
+     5. Lantern Opencode
+        opencode
+     6. Cursor Agent
+        Cursor
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+
+
+
+
+
+
+
+

@@ -1,0 +1,36 @@
+[2m• [0m[39m[49mClaude Code options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+• [0m[39m[49mThis terminal now controls the host.
+
+[2m• [0m[39m[49mAnother terminal took control. Watching; Alt+T takes it back.
+
+[2m• [0m[39m[49mPermission: Allow once [38;5;8mPaint the boathouse
+
+
+[1;2m[39m› [0m[39m[49mperm boat
+
+
+[38;5;1m■ watcher is read-only; take control before changing a session
+
+[2m[39m• [0m[39m[49mThis terminal now controls the host.
+
+[1mSessions 6 · 1 waiting on you · 3 failed · 2 ready[0;2m[39m[49m  tab: waiting only · / search
+[0m[39m[49m
+[1mAll[0m[39m[49m  [38;5;8mwaiting on you[39m
+
+ [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                    [1mAgent[0m[39m[49m         [1mStatus
+[0m[39m[49m   ✕ new session                                                              [38;5;4mgemini[39m        [38;5;1mfailed
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m3m ago
+[39m   ○ /agents                                                                  [38;5;15mcodex[39m         [38;5;2mready
+[39m   [38;5;8m  host-audit · codex heard: /agents[39m                                                      [38;5;8m2m ago
+[39m   ✕ new session                                                              [38;5;4mgemini[39m        [38;5;1mfailed
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m3m ago
+[39m   ○ new session                                                              opencode      [38;5;2mready
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m1m ago
+[1m[38;5;2m▏›[0m[39m[49m ● perm boat (on screen)                                                    [38;5;3mclaude-code[39m   [38;5;3mwaiting on you[39m             [1m[38;5;2m▕
+▏[0m[39m[49m  [38;5;8m  host-audit · approve: Paint the boathouse[39m                                              [38;5;8m26s ago[39m                    [1m[38;5;2m▕
+[0m[39m[49m   ✕ new session                                                              nonesuch      [38;5;1mfailed
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m1m ago[39m
+
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose
+[39m

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+■ No session is open on this host. Pick one with /sessions.
+
+■ /agent: not available in nori attach yet
+
+
+/
+
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        set how this session asks for approval (current: Agent)
+  /settings         configure Nori CLI settings (theme, hotkeys, layout, …)
+  /vim              configure Vim mode and Enter key behavior
+  /goal             set or view the goal for a long-running task
+  /new              start a new chat during a conversation
+  /sessions         list sessions and move between them
+  /delegate         delegate a task: /delegate <agent> <task>
+  /resume           not available in nori attach yet

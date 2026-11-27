@@ -1,0 +1,36 @@
+shell$ nori attach --agent codex
+error: unexpected argument '--agent' found
+
+  tip: to pass '--agent' as a value, use '-- --agent'
+
+Usage: nori attach [OPTIONS] [SESSION_ID]
+
+For more information, try '--help'.
+shell$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+• This terminal now controls the host.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+• Permission: Allow once Paint the boathouse
+
+
+› perm boat
+
+
+■ watcher is read-only; take control before changing a session
+
+• This terminal now controls the host.
+
+  1 waiting on you · 3 failed · 2 ready
+
+• Thinking really hard (5s • esc to interrupt)
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · ! shell · controlling · host-audit · claude-code · waiting on you · Approvals: Agent · ctrl+d detach

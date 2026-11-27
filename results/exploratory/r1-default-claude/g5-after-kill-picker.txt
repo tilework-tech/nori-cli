@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 4 · 3 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› · hello there                                                              claude-code   closed                     ▕
+▏    app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…                5m ago                     ▕
+   ○ second session ping                                                      claude-code   ready
+     app · claude-code heard: from B                                                        5m ago
+   ○ codex check                                                              codex         ready
+     app · - reef row 01 - reef row 02 - reef row 03 - reef row 04 - reef r…                21s ago
+   ○ which agent                                                              claude-code   ready
+     app · claude-code heard: codex check                                                   2m ago
+
+↑↓/j/k move  enter open  ctrl+d remove  tab waiting on you  esc close
+

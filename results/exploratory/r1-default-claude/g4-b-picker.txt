@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› ○ hello there                                                              claude-code   ready                      ▕
+▏    app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…                30s ago                    ▕
+   ○ second session ping                                                      claude-code   ready
+     app · claude-code heard: second session ping                                           10s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

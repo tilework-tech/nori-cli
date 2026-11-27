@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 4 · 1 working · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› · hello there                                                              claude-code   closed                     ▕
+▏    app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…                3m ago                     ▕
+   ○ second session ping                                                      claude-code   ready
+     app · claude-code heard: from B                                                        3m ago
+   ⠋ codex check                                                              codex         working
+     app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…                0s ago
+   ○ which agent                                                              claude-code   ready
+     app · claude-code heard: codex check                                                   39s ago
+
+↑↓/j/k move  enter open  ctrl+d remove  tab waiting on you  esc close
+

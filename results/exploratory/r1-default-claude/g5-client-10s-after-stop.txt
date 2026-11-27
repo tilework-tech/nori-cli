@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+■ Lost the connection to the host (host connection closed). Reconnecting; your draft is kept.
+
+  3 ready
+
+
+〉
+
+  / commands · @ files · ? help · RECONNECTING · claude-code · draft kept · ctrl+d detach

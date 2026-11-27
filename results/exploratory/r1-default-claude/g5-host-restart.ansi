@@ -1,0 +1,36 @@
+shell$ nori host stop
+Host stopped.
+shell$ nori host
+Host started (pid 42775)  ws://127.0.0.1:7420/acp
+Token: /tmp/hostaudit-r1/homes/host/host/token (owner-only)
+shell$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

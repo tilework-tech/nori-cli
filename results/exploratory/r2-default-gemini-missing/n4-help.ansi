@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;3m⚠ Connection is taking longer than expected. Will abort in 30s if still unresponsive.
+[39m
+[2m• [0m[39m[49mCodex options: Mode=[1m[38;5;6magent[0;2m[39m[49m (/config to change)
+[0m[39m[49m
+
+[1;2m› [0m[39m[49m/agents
+
+
+[2m• [0m[39m[49mcodex heard: /agents
+
+  [2m2 failed · 1 ready[0m[39m[49m
+
+                                                                                                               [2m[ agent ]
+[0m[38;5;8m[49m?[39m
+
+  [2m/[0m[39m[49m for commands                          [2mctrl + j[0m[39m[49m for newline
+  [2m@[0m[39m[49m for file paths                        [2m$[0m[39m[49m for skills
+  [2m![0m[39m[49m for shell commands                    [2mctrl + v[0m[39m[49m to paste images
+  [2mesc[0m[39m[49m [2mesc[0m[39m[49m to edit previous message        [2mctrl + g[0m[39m[49m to open editor
+  [2mctrl + c[0m[39m[49m to exit                        [2malt + p[0m[39m[49m to toggle plan drawer
+  [2mctrl + l[0m[39m[49m to toggle full screen          [2mctrl + t[0m[39m[49m to view transcript

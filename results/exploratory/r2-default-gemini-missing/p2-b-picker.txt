@@ -1,0 +1,36 @@
+• Claude Code options: Mode=auto (/config to change)
+
+• This terminal now controls the host.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+• Permission: Allow once Paint the boathouse
+
+
+› perm boat
+
+
+■ watcher is read-only; take control before changing a session
+
+• This terminal now controls the host.
+
+Sessions 6 · 1 waiting on you · 3 failed · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+   ✕ new session                                                              gemini        failed
+     no reply yet                                                                           3m ago
+   ○ /agents                                                                  codex         ready
+     host-audit · codex heard: /agents                                                      2m ago
+   ✕ new session                                                              gemini        failed
+     no reply yet                                                                           3m ago
+   ○ new session                                                              opencode      ready
+     no reply yet                                                                           1m ago
+▏› ● perm boat (on screen)                                                    claude-code   waiting on you             ▕
+▏    host-audit · approve: Paint the boathouse                                              26s ago                    ▕
+   ✕ new session                                                              nonesuch      failed
+     no reply yet                                                                           1m ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

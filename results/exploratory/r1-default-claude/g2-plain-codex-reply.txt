@@ -1,0 +1,36 @@
+shell$ nori
+  〉nori CLI v0.30.0-next.15
+
+  System       /tmp/hostaudit-r1/roots/alpha/app
+  Agent        Claude
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+■ Couldn't prepare Antigravity: Could not find the Antigravity CLI. Suggested fix: install Antigravity from
+https://antigravity.google/cli and add `agy` to PATH: Failed to spawn ACP agent: agy: No such file or directory (os
+error 2)
+
+
+› hi codex
+
+
+• claude-code heard: hi codex
+
+                                                                                                         [ acceptEdits ]
+〉
+
+  / commands · ! shell · @ files · ? help
+
+
+
+
+
+
+
+
+
+
+

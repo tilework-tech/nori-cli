@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› root flag
+
+
+• claude-code heard: root flag
+
+  1 failed · 3 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

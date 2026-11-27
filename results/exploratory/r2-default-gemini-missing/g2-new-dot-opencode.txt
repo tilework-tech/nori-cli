@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• OpenCode options: Mode=build (/config to change)
+
+  2 failed · 2 ready
+
+                                                                                                               [ build ]
+〉
+
+  controlling · host-audit · opencode · ready · Approvals: Agent · ctrl+d detach        ⎇ nori/host-audit-five-goals-...

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› second session ping
+
+
+• claude-code heard: second session ping
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+• This terminal now controls the host.
+
+
+› from B
+
+
+• claude-code heard: from B
+
+Sessions 2 · 2 ready  tab: all sessions · / search
+
+All  waiting on you
+
+◇ No sessions waiting on you
+  Press tab to show all sessions.
+
+
+↑↓/j/k move  enter open  tab all sessions  esc close
+

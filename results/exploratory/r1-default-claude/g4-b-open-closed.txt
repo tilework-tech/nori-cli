@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› second session ping
+
+
+• claude-code heard: second session ping
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+• This terminal now controls the host.
+
+
+› from B
+
+
+• claude-code heard: from B
+
+  1 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

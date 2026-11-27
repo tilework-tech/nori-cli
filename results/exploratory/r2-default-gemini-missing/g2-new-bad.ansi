@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;1m■ Failed to start ACP session: Unknown ACP agent: nonesuch[39m
+
+  [2m3 failed · 3 ready[0m[39m[49m
+
+
+[1m〉[0m[39m[49m
+
+  [38;5;2mcontrolling[2m[39m · host-audit · nonesuch · failed · Approvals: Agent · ctrl+d detach[0m[39m[49m       [38;5;9m⎇ nori/host-audit-five-goals-...

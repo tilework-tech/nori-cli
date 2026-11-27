@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1mSessions 6 · 3 failed · 3 ready[0;2m[39m[49m  tab: waiting only · / search
+
+[0;1m[39m[49mAll[0m[39m[49m  [38;5;8mwaiting on you
+
+[39m [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                    [1mAgent[0m[39m[49m         [1mStatus
+[38;5;2m▏›[0m[39m[49m ✕ new session                                                              [38;5;4mgemini[39m        [38;5;1mfailed[39m                     [1m[38;5;2m▕
+▏[0m[39m[49m  [38;5;8m  no reply yet[39m                                                                           [38;5;8m4m ago[39m                     [1m[38;5;2m▕
+[0m[39m[49m   ○ /agents                                                                  [38;5;15mcodex[39m         [38;5;2mready
+[39m   [38;5;8m  host-audit · codex heard: /agents[39m                                                      [38;5;8m3m ago
+[39m   ✕ new session                                                              [38;5;4mgemini[39m        [38;5;1mfailed
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m4m ago
+[39m   ○ new session                                                              opencode      [38;5;2mready
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m2m ago
+[39m   ○ perm boat                                                                [38;5;3mclaude-code[39m   [38;5;2mready
+[39m   [38;5;8m  host-audit · claude-code permission: {"outcome": "cancelled"}[39m                          [38;5;8m18s ago
+[39m   ✕ new session                                                              nonesuch      [38;5;1mfailed
+[39m   [38;5;8m  no reply yet[39m                                                                           [38;5;8m2m ago
+
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+r[39m [38;5;8mresume  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose
+

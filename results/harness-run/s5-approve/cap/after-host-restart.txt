@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+• Permission: Allow once Paint the boathouse
+
+
+› perm boat
+
+
+■ watcher is read-only; take control before changing a session
+
+• This terminal now controls the host.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+─ Worked for 13s ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+■ Lost the connection to the host (host connection closed). Reconnecting; your draft is kept.
+
+■ Host restarted; sessions were lost. Re-run nori attach.
+
+  1 working · 1 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · @ files · ? help · DISCONNECTED · app · claude-code · ready · Approvals: Agent · ctrl+d detach

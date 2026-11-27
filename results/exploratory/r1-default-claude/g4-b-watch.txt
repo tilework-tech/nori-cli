@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› second session ping
+
+
+• claude-code heard: second session ping
+
+  2 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

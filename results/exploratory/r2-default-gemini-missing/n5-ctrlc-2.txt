@@ -1,0 +1,36 @@
+shell$ nori attach 8dfc
+shell$ ^C
+shell$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

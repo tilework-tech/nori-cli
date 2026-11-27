@@ -1,0 +1,36 @@
+shell$ nori host
+Host started (pid 31695)  ws://127.0.0.1:7420/acp
+Token: /tmp/hostaudit-r1/homes/host/host/token (owner-only)
+shell$ nori host ls
+   Session                                                                    Agent         Status
+shell$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

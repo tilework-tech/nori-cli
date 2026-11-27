@@ -1,0 +1,36 @@
+
+
+
+
+
+
+[2m• [0m[39m[49mClaude Code options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+[0m[39m[49m
+
+[1;2m› [0m[39m[49msecond session ping
+
+
+[2m• [0m[39m[49mclaude-code heard: second session ping
+
+[38;5;1m■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+[39m
+[2m• [0m[39m[49mThis terminal now controls the host.
+
+
+[1;2m› [0m[39m[49mfrom B
+
+
+[2m• [0m[39m[49mclaude-code heard: from B
+
+[1mSessions 2 · 1 ready[0;2m[39m[49m  tab: waiting only · / search[0m[39m[49m
+
+[1mAll[0m[39m[49m  [38;5;8mwaiting on you[39m
+
+ [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                    [1mAgent[0m[39m[49m         [1mStatus
+[38;5;2m▏›[0m[39m[49m [38;5;8m· hello there[39m                                                              [38;5;3mclaude-code[39m   [38;5;8mclosed[39m                     [1m[38;5;2m▕
+▏[0m[39m[49m  [38;5;8m  app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…[39m                [38;5;8m1s ago[39m                     [1m[38;5;2m▕
+[0m[39m[49m   ○ second session ping (on screen)                                          [38;5;3mclaude-code[39m   [38;5;2mready[39m
+   [38;5;8m  app · claude-code heard: from B[39m                                                        [38;5;8m17s ago[39m
+
+[38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mremove  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose[39m
+

@@ -1,0 +1,23 @@
+OBSERVED F6a  empty picker shows developer copy, no /new hint
+OBSERVED F3a  /agents is not a command; sent as a prompt with no session
+OBSERVED F3b  /agent is greyed in attach
+OBSERVED F3c  /config is greyed in attach
+OBSERVED OK1  Ctrl+D in empty composer detaches
+OBSERVED OK2  Ctrl+D in empty picker detaches
+OBSERVED OK3  /new starts the host default agent and replies
+OBSERVED OK4  /new <agent> picks the agent (only documented in tui.md)
+OBSERVED F3d  an agent typo leaves a failed session
+OBSERVED F3e  root --agent is ignored by attach /new (docs say it applies)
+OBSERVED F1a  populated picker footer offers ctrl+d close
+OBSERVED F1b  one Ctrl+D in the picker closes a live session, no confirmation
+OBSERVED F1c  five Ctrl+D presses on a failed row do nothing
+OBSERVED F1d  ctrl+r resume on a spawn-failed row errors
+OBSERVED OK5  workaround: Esc, then Ctrl+D detaches
+OBSERVED F4a  watcher sees an actionable-looking approval
+OBSERVED F2   Ctrl+D does not detach while an approval is open
+OBSERVED F4b  after a watcher pressed y, Alt+T never shows the pending approval
+OBSERVED OK6  workaround: a fresh attach plus Alt+T shows the approval
+OBSERVED F5a  reattach picker cursor starts on the oldest row, not the session just left
+OBSERVED F7   attached clients show RECONNECTING, not 'host stopped'
+OBSERVED F5b  after restart the host lists no sessions
+OBSERVED OK7  workaround: nori resume (private host) still lists them

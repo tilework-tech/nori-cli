@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 6 · 3 failed · 3 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› ✕ new session                                                              gemini        failed                     ▕
+▏    no reply yet                                                                           4m ago                     ▕
+   ○ /agents                                                                  codex         ready
+     host-audit · codex heard: /agents                                                      3m ago
+   ✕ new session                                                              gemini        failed
+     no reply yet                                                                           4m ago
+   ○ new session                                                              opencode      ready
+     no reply yet                                                                           2m ago
+   ○ perm boat                                                                claude-code   ready
+     host-audit · claude-code permission: {"outcome": "cancelled"}                          18s ago
+   ✕ new session                                                              nonesuch      failed
+     no reply yet                                                                           2m ago
+
+↑↓/j/k move  enter open  ctrl+r resume  ctrl+d close  tab waiting on you  esc close
+

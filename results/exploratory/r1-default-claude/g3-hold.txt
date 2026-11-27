@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› hello there
+
+
+• claude-code heard: hello there
+
+• Permission: Allow once Paint the boathouse
+
+
+› perm please
+
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+
+› hold on
+
+
+• git push --force-ing my way through (2s • esc to interrupt)
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · claude-code · working · Approvals: Agent · ctrl+d detach

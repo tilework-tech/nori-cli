@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› hello there
+
+
+• claude-code heard: hello there
+
+
+› perm please
+
+
+
+  Would you like to allow edit: Paint the boathouse?
+
+  Paint the boathouse
+
+  ▏› 1. Allow once (y)                                                                                               ▕
+     2. Reject (esc)
+
+  Press enter to confirm or esc to reject

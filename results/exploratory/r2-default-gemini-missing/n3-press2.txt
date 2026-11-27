@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 3 · 2 failed · 1 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› ✕ new session                                                              gemini        failed                     ▕
+▏    no reply yet                                                                           1m ago                     ▕
+   ○ new session                                                              codex         ready
+     no reply yet                                                                           21s ago
+   ✕ new session                                                              gemini        failed
+     no reply yet                                                                           38s ago
+
+↑↓/j/k move  enter open  ctrl+r resume  ctrl+d close  tab waiting on you  esc close
+

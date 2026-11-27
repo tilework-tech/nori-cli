@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+
+〉
+
+  / commands · @ files · ? help · controlling · claude-code · ctrl+d detach

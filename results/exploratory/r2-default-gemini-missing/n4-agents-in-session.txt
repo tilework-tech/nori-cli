@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+⚠ Connection is taking longer than expected. Will abort in 30s if still unresponsive.
+
+• Codex options: Mode=agent (/config to change)
+
+
+› /agents
+
+
+• codex heard: /agents
+
+  2 failed · 1 ready
+
+                                                                                                               [ agent ]
+〉
+
+  controlling · host-audit · codex · ready · Approvals: Agent · ctrl+d detach           ⎇ nori/host-audit-five-goals-...

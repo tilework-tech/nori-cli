@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=agent (/config to change)
+
+
+› codex check
+
+
+• codex heard: codex check
+
+  3 ready
+
+                                                                                                               [ agent ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · codex · ready · Approvals: Agent · ctrl+d detach

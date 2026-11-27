@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 2 · 1 working · 1 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+▏› ○ perm boat                                                                claude-code   ready                      ▕
+▏    app · claude-code permission: {"outcome": "selected", "optionId": "all…                17s ago                    ▕
+   ⠋ relay 80 reef                                                            claude-code   working
+     app · - reef row 01 - reef row 02 - reef row 03 - reef row 04 - reef r…                0s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› which agent
+
+
+• claude-code heard: which agent
+
+Sessions 4 · 3 ready  tab: waiting only · / search
+
+All  waiting on you
+
+   Session                                                                    Agent         Status
+   · hello there                                                              claude-code   closed
+     app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…                2m ago
+   ○ second session ping                                                      claude-code   ready
+     app · claude-code heard: from B                                                        2m ago
+   ○ new session                                                              codex         ready
+     no reply yet                                                                           34s ago
+▏› ○ which agent (on screen)                                                  claude-code   ready                      ▕
+▏    app · claude-code heard: which agent                                                   11s ago                    ▕
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

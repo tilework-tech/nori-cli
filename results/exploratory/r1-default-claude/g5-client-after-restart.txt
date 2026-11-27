@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+■ Lost the connection to the host (host connection closed). Reconnecting; your draft is kept.
+
+■ Host restarted; sessions were lost. Re-run nori attach.
+
+  3 ready
+
+
+〉
+
+  / commands · @ files · ? help · DISCONNECTED · claude-code · ctrl+d detach

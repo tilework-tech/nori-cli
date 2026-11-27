@@ -1,0 +1,25 @@
+{"t": 1795801563.2064087, "adapter": "claude-code", "pid": 66838, "kind": "spawn", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app", "argv": []}
+{"t": 1795801563.2064903, "adapter": "claude-code", "pid": 66838, "kind": "request", "method": "initialize"}
+{"t": 1795801563.207152, "adapter": "claude-code", "pid": 66838, "kind": "request", "method": "session/list", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app"}
+{"t": 1795801563.207408, "adapter": "claude-code", "pid": 66838, "kind": "request", "method": "session/new", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app"}
+{"t": 1795801563.2100077, "adapter": "claude-code", "pid": 66838, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795801567.0532475, "adapter": "claude-code", "pid": 66838, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "who answers"}
+{"t": 1795801567.053789, "adapter": "claude-code", "pid": 66838, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795801569.9030607, "adapter": "codex", "pid": 67006, "kind": "spawn", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app", "argv": []}
+{"t": 1795801569.9031353, "adapter": "codex", "pid": 67006, "kind": "request", "method": "initialize"}
+{"t": 1795801569.9033816, "adapter": "codex", "pid": 67006, "kind": "request", "method": "session/list", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app"}
+{"t": 1795801569.903622, "adapter": "codex", "pid": 67006, "kind": "request", "method": "session/new", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app"}
+{"t": 1795801569.9061055, "adapter": "codex", "pid": 67006, "kind": "request", "method": "session/set_config_option", "sessionId": "codex-0", "configId": "mode", "value": "workspace-write"}
+{"t": 1795801573.6220367, "adapter": "codex", "pid": 67006, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "who now"}
+{"t": 1795801573.6222613, "adapter": "codex", "pid": 67006, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "end_turn"}
+{"t": 1795801588.532642, "adapter": "claude-code", "pid": 67450, "kind": "spawn", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app", "argv": []}
+{"t": 1795801588.5327132, "adapter": "claude-code", "pid": 67450, "kind": "request", "method": "initialize"}
+{"t": 1795801588.5329714, "adapter": "claude-code", "pid": 67450, "kind": "request", "method": "session/list", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app"}
+{"t": 1795801588.5332336, "adapter": "claude-code", "pid": 67450, "kind": "request", "method": "session/new", "cwd": "/tmp/audit-out4/s1-zero/roots/alpha/app"}
+{"t": 1795801588.5356538, "adapter": "claude-code", "pid": 67450, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795801592.3167017, "adapter": "claude-code", "pid": 67450, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "root flag"}
+{"t": 1795801592.3170428, "adapter": "claude-code", "pid": 67450, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795801601.5091856, "adapter": "codex", "pid": 67006, "kind": "request", "method": "session/close", "sessionId": "codex-0"}
+{"t": 1795801601.5095725, "adapter": "codex", "pid": 67006, "kind": "stdin_eof"}
+{"t": 1795801605.2886395, "adapter": "claude-code", "pid": 67450, "kind": "stdin_eof"}
+{"t": 1795801605.2897098, "adapter": "claude-code", "pid": 66838, "kind": "stdin_eof"}

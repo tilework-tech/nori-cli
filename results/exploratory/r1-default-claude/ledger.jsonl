@@ -1,0 +1,505 @@
+{"t": 1795799957.3462641, "adapter": "claude-code", "pid": 33530, "kind": "spawn", "cwd": "/tmp/hostaudit-r1/roots/alpha/app", "argv": []}
+{"t": 1795799957.3463614, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "initialize"}
+{"t": 1795799957.3467484, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/list", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795799957.347078, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/new", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795799957.3497748, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795799966.7612839, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "hello there"}
+{"t": 1795799966.7617428, "adapter": "claude-code", "pid": 33530, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795799970.6380956, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "perm please"}
+{"t": 1795799977.8031375, "adapter": "claude-code", "pid": 33530, "kind": "response", "id": 9000, "body": {"outcome": {"outcome": "selected", "optionId": "allow"}}}
+{"t": 1795799980.543607, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "hold on"}
+{"t": 1795799980.5440705, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795799980.7442446, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795799980.9444256, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795799981.1446571, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 4}
+{"t": 1795799981.3448322, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 5}
+{"t": 1795799981.54499, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 6}
+{"t": 1795799981.745143, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 7}
+{"t": 1795799981.9453185, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 8}
+{"t": 1795799982.1454837, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 9}
+{"t": 1795799982.3456783, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 10}
+{"t": 1795799982.5458386, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 11}
+{"t": 1795799982.7459788, "adapter": "claude-code", "pid": 33530, "kind": "tick", "sessionId": "claude-code-0", "n": 12}
+{"t": 1795799982.8040984, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795799982.9460924, "adapter": "claude-code", "pid": 33530, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "cancelled", "ticks": 12}
+{"t": 1795799999.4776745, "adapter": "claude-code", "pid": 34380, "kind": "spawn", "cwd": "/tmp/hostaudit-r1/roots/alpha/app", "argv": []}
+{"t": 1795799999.4777572, "adapter": "claude-code", "pid": 34380, "kind": "request", "method": "initialize"}
+{"t": 1795799999.4780214, "adapter": "claude-code", "pid": 34380, "kind": "request", "method": "session/list", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795799999.4782696, "adapter": "claude-code", "pid": 34380, "kind": "request", "method": "session/new", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795799999.4812663, "adapter": "claude-code", "pid": 34380, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795800003.587987, "adapter": "claude-code", "pid": 34380, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "second session ping"}
+{"t": 1795800003.5882196, "adapter": "claude-code", "pid": 34380, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795800040.13673, "adapter": "claude-code", "pid": 34380, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "from B"}
+{"t": 1795800040.1372151, "adapter": "claude-code", "pid": 34380, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795800056.3974416, "adapter": "claude-code", "pid": 33530, "kind": "request", "method": "session/close", "sessionId": "claude-code-0"}
+{"t": 1795800056.3978996, "adapter": "claude-code", "pid": 33530, "kind": "stdin_eof"}
+{"t": 1795800098.532455, "adapter": "claude-code", "pid": 36456, "kind": "spawn", "cwd": "/tmp/hostaudit-r1/roots/alpha/app", "argv": []}
+{"t": 1795800098.5325296, "adapter": "claude-code", "pid": 36456, "kind": "request", "method": "initialize"}
+{"t": 1795800098.5327864, "adapter": "claude-code", "pid": 36456, "kind": "request", "method": "session/list", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795800098.5334198, "adapter": "claude-code", "pid": 36456, "kind": "request", "method": "session/new", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795800098.536503, "adapter": "claude-code", "pid": 36456, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795800125.5514061, "adapter": "claude-code", "pid": 36456, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhi codex"}
+{"t": 1795800125.5518131, "adapter": "claude-code", "pid": 36456, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795800128.811026, "adapter": "claude-code", "pid": 36456, "kind": "stdin_eof"}
+{"t": 1795800170.822013, "adapter": "codex", "pid": 37977, "kind": "spawn", "cwd": "/tmp/hostaudit-r1/roots/alpha/app", "argv": []}
+{"t": 1795800170.8221037, "adapter": "codex", "pid": 37977, "kind": "request", "method": "initialize"}
+{"t": 1795800170.8223426, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/list", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795800170.8225377, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/new", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795800170.8251834, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/set_config_option", "sessionId": "codex-0", "configId": "mode", "value": "workspace-write"}
+{"t": 1795800190.9098656, "adapter": "claude-code", "pid": 38414, "kind": "spawn", "cwd": "/tmp/hostaudit-r1/roots/alpha/app", "argv": []}
+{"t": 1795800190.9099417, "adapter": "claude-code", "pid": 38414, "kind": "request", "method": "initialize"}
+{"t": 1795800190.9102058, "adapter": "claude-code", "pid": 38414, "kind": "request", "method": "session/list", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795800190.910482, "adapter": "claude-code", "pid": 38414, "kind": "request", "method": "session/new", "cwd": "/tmp/hostaudit-r1/roots/alpha/app"}
+{"t": 1795800190.9130392, "adapter": "claude-code", "pid": 38414, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795800194.761439, "adapter": "claude-code", "pid": 38414, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "which agent"}
+{"t": 1795800194.7618017, "adapter": "claude-code", "pid": 38414, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795800210.9903135, "adapter": "claude-code", "pid": 38414, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "codex check"}
+{"t": 1795800210.9906642, "adapter": "claude-code", "pid": 38414, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795800223.0349631, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "codex check"}
+{"t": 1795800223.0353723, "adapter": "codex", "pid": 37977, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "end_turn"}
+{"t": 1795800237.9409556, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "hold busy"}
+{"t": 1795800237.941259, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 1}
+{"t": 1795800238.1414351, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 2}
+{"t": 1795800238.3416224, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 3}
+{"t": 1795800238.5417852, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 4}
+{"t": 1795800238.7419238, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 5}
+{"t": 1795800238.9420965, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 6}
+{"t": 1795800239.1422887, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 7}
+{"t": 1795800239.342451, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 8}
+{"t": 1795800239.5426424, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 9}
+{"t": 1795800239.7428162, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 10}
+{"t": 1795800239.9430006, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 11}
+{"t": 1795800240.1431618, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 12}
+{"t": 1795800240.3433802, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 13}
+{"t": 1795800240.543562, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 14}
+{"t": 1795800240.7437716, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 15}
+{"t": 1795800240.943972, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 16}
+{"t": 1795800241.1441808, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 17}
+{"t": 1795800241.3444016, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 18}
+{"t": 1795800241.5446038, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 19}
+{"t": 1795800241.7447581, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 20}
+{"t": 1795800241.9449313, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 21}
+{"t": 1795800242.1451275, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 22}
+{"t": 1795800242.345354, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 23}
+{"t": 1795800242.5455303, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 24}
+{"t": 1795800242.7457333, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 25}
+{"t": 1795800242.945927, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 26}
+{"t": 1795800243.146107, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 27}
+{"t": 1795800243.3463, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 28}
+{"t": 1795800243.5465007, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 29}
+{"t": 1795800243.7466748, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 30}
+{"t": 1795800243.946851, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 31}
+{"t": 1795800244.1470337, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 32}
+{"t": 1795800244.3472278, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 33}
+{"t": 1795800244.5474002, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 34}
+{"t": 1795800244.74756, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 35}
+{"t": 1795800244.9477777, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 36}
+{"t": 1795800245.1479437, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 37}
+{"t": 1795800245.3481212, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 38}
+{"t": 1795800245.5483077, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 39}
+{"t": 1795800245.7484627, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 40}
+{"t": 1795800245.9486718, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 41}
+{"t": 1795800246.1488502, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 42}
+{"t": 1795800246.3490186, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 43}
+{"t": 1795800246.5492122, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 44}
+{"t": 1795800246.7493875, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 45}
+{"t": 1795800246.9495811, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 46}
+{"t": 1795800247.1497924, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 47}
+{"t": 1795800247.3499928, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 48}
+{"t": 1795800247.5501926, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 49}
+{"t": 1795800247.7503867, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 50}
+{"t": 1795800247.9505775, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 51}
+{"t": 1795800248.1507688, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 52}
+{"t": 1795800248.3509712, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 53}
+{"t": 1795800248.5511672, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 54}
+{"t": 1795800248.751362, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 55}
+{"t": 1795800248.9515727, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 56}
+{"t": 1795800249.1517484, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 57}
+{"t": 1795800249.3519576, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 58}
+{"t": 1795800249.5521612, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 59}
+{"t": 1795800249.7523487, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 60}
+{"t": 1795800249.9525173, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 61}
+{"t": 1795800250.1527033, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 62}
+{"t": 1795800250.3528726, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 63}
+{"t": 1795800250.553064, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 64}
+{"t": 1795800250.7532496, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 65}
+{"t": 1795800250.9534416, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 66}
+{"t": 1795800251.1536694, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 67}
+{"t": 1795800251.353916, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 68}
+{"t": 1795800251.55413, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 69}
+{"t": 1795800251.7543259, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 70}
+{"t": 1795800251.954511, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 71}
+{"t": 1795800252.1546926, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 72}
+{"t": 1795800252.3548722, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 73}
+{"t": 1795800252.5550673, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 74}
+{"t": 1795800252.7553015, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 75}
+{"t": 1795800252.9555464, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 76}
+{"t": 1795800253.155751, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 77}
+{"t": 1795800253.3559518, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 78}
+{"t": 1795800253.5561676, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 79}
+{"t": 1795800253.756364, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 80}
+{"t": 1795800253.9565535, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 81}
+{"t": 1795800254.1567237, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 82}
+{"t": 1795800254.3569283, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 83}
+{"t": 1795800254.557136, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 84}
+{"t": 1795800254.7573502, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 85}
+{"t": 1795800254.9575481, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 86}
+{"t": 1795800255.1577423, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 87}
+{"t": 1795800255.3579402, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 88}
+{"t": 1795800255.5581517, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 89}
+{"t": 1795800255.7583635, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 90}
+{"t": 1795800255.9585776, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 91}
+{"t": 1795800256.158791, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 92}
+{"t": 1795800256.3590186, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 93}
+{"t": 1795800256.559226, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 94}
+{"t": 1795800256.7593992, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 95}
+{"t": 1795800256.9595897, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 96}
+{"t": 1795800257.159816, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 97}
+{"t": 1795800257.36003, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 98}
+{"t": 1795800257.5602245, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 99}
+{"t": 1795800257.7603915, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 100}
+{"t": 1795800257.9605558, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 101}
+{"t": 1795800258.160738, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 102}
+{"t": 1795800258.3609452, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 103}
+{"t": 1795800258.5611315, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 104}
+{"t": 1795800258.7612975, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 105}
+{"t": 1795800258.961486, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 106}
+{"t": 1795800259.1617064, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 107}
+{"t": 1795800259.3619063, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 108}
+{"t": 1795800259.562086, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 109}
+{"t": 1795800259.7622733, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 110}
+{"t": 1795800259.9624622, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 111}
+{"t": 1795800260.1626618, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 112}
+{"t": 1795800260.36289, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 113}
+{"t": 1795800260.5631313, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 114}
+{"t": 1795800260.7633069, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 115}
+{"t": 1795800260.9634938, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 116}
+{"t": 1795800261.1636884, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 117}
+{"t": 1795800261.3638833, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 118}
+{"t": 1795800261.5640728, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 119}
+{"t": 1795800261.7642357, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 120}
+{"t": 1795800261.9644394, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 121}
+{"t": 1795800262.16465, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 122}
+{"t": 1795800262.364852, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 123}
+{"t": 1795800262.5650702, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 124}
+{"t": 1795800262.7652378, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 125}
+{"t": 1795800262.9654322, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 126}
+{"t": 1795800263.1656225, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 127}
+{"t": 1795800263.365819, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 128}
+{"t": 1795800263.5660188, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 129}
+{"t": 1795800263.766232, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 130}
+{"t": 1795800263.9664674, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 131}
+{"t": 1795800264.1666474, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 132}
+{"t": 1795800264.3668523, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 133}
+{"t": 1795800264.5670643, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 134}
+{"t": 1795800264.7672307, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 135}
+{"t": 1795800264.967416, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 136}
+{"t": 1795800265.1676307, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 137}
+{"t": 1795800265.36783, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 138}
+{"t": 1795800265.568034, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 139}
+{"t": 1795800265.7682116, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 140}
+{"t": 1795800265.9683993, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 141}
+{"t": 1795800266.1685736, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 142}
+{"t": 1795800266.3687904, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 143}
+{"t": 1795800266.5689886, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 144}
+{"t": 1795800266.7691677, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 145}
+{"t": 1795800266.969349, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 146}
+{"t": 1795800267.169511, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 147}
+{"t": 1795800267.3697135, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 148}
+{"t": 1795800267.5698965, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 149}
+{"t": 1795800267.7700458, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 150}
+{"t": 1795800267.9702063, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 151}
+{"t": 1795800268.1703892, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 152}
+{"t": 1795800268.3705673, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 153}
+{"t": 1795800268.5707452, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 154}
+{"t": 1795800268.7709274, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 155}
+{"t": 1795800268.9711225, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 156}
+{"t": 1795800269.1713417, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 157}
+{"t": 1795800269.3715441, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 158}
+{"t": 1795800269.571717, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 159}
+{"t": 1795800269.7720904, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 160}
+{"t": 1795800269.9723053, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 161}
+{"t": 1795800270.1724942, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 162}
+{"t": 1795800270.3726962, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 163}
+{"t": 1795800270.5728672, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 164}
+{"t": 1795800270.7730486, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 165}
+{"t": 1795800270.9732378, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 166}
+{"t": 1795800271.1734238, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 167}
+{"t": 1795800271.3736036, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 168}
+{"t": 1795800271.5738103, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 169}
+{"t": 1795800271.7739744, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 170}
+{"t": 1795800271.9741561, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 171}
+{"t": 1795800272.1743398, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 172}
+{"t": 1795800272.3745294, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 173}
+{"t": 1795800272.5747025, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 174}
+{"t": 1795800272.7748923, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 175}
+{"t": 1795800272.9750698, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 176}
+{"t": 1795800273.1752708, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 177}
+{"t": 1795800273.3754995, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 178}
+{"t": 1795800273.5756998, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 179}
+{"t": 1795800273.776059, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 180}
+{"t": 1795800273.9762425, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 181}
+{"t": 1795800274.176424, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 182}
+{"t": 1795800274.3766305, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 183}
+{"t": 1795800274.5768144, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 184}
+{"t": 1795800274.7770138, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 185}
+{"t": 1795800274.9772346, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 186}
+{"t": 1795800275.1774135, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 187}
+{"t": 1795800275.3776152, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 188}
+{"t": 1795800275.5777876, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 189}
+{"t": 1795800275.777973, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 190}
+{"t": 1795800275.9781532, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 191}
+{"t": 1795800276.178344, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 192}
+{"t": 1795800276.3785322, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 193}
+{"t": 1795800276.578741, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 194}
+{"t": 1795800276.7789173, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 195}
+{"t": 1795800276.9790926, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 196}
+{"t": 1795800277.1792595, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 197}
+{"t": 1795800277.3794951, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 198}
+{"t": 1795800277.579674, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 199}
+{"t": 1795800277.7798448, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 200}
+{"t": 1795800277.9800203, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 201}
+{"t": 1795800278.180191, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 202}
+{"t": 1795800278.3803718, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 203}
+{"t": 1795800278.5805483, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 204}
+{"t": 1795800278.780705, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 205}
+{"t": 1795800278.98086, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 206}
+{"t": 1795800279.1810298, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 207}
+{"t": 1795800279.3812113, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 208}
+{"t": 1795800279.5814068, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 209}
+{"t": 1795800279.7815936, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 210}
+{"t": 1795800279.9817822, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 211}
+{"t": 1795800280.1819427, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 212}
+{"t": 1795800280.3821084, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 213}
+{"t": 1795800280.582263, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 214}
+{"t": 1795800280.7824616, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 215}
+{"t": 1795800280.982635, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 216}
+{"t": 1795800281.1828136, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 217}
+{"t": 1795800281.3829987, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 218}
+{"t": 1795800281.5831645, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 219}
+{"t": 1795800281.7833285, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 220}
+{"t": 1795800281.9834893, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 221}
+{"t": 1795800282.1836672, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 222}
+{"t": 1795800282.3838449, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 223}
+{"t": 1795800282.58403, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 224}
+{"t": 1795800282.7842069, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 225}
+{"t": 1795800282.984406, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 226}
+{"t": 1795800283.1845722, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 227}
+{"t": 1795800283.3847342, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 228}
+{"t": 1795800283.5848875, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 229}
+{"t": 1795800283.785037, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 230}
+{"t": 1795800283.9852068, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 231}
+{"t": 1795800284.1853828, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 232}
+{"t": 1795800284.3855634, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 233}
+{"t": 1795800284.5857422, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 234}
+{"t": 1795800284.7859113, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 235}
+{"t": 1795800284.9861615, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 236}
+{"t": 1795800285.186343, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 237}
+{"t": 1795800285.3865123, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 238}
+{"t": 1795800285.5866854, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 239}
+{"t": 1795800285.786852, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 240}
+{"t": 1795800285.9870267, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 241}
+{"t": 1795800286.1871974, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 242}
+{"t": 1795800286.387374, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 243}
+{"t": 1795800286.5875485, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 244}
+{"t": 1795800286.7877135, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 245}
+{"t": 1795800286.9878714, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 246}
+{"t": 1795800287.1880193, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 247}
+{"t": 1795800287.388278, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 248}
+{"t": 1795800287.5884607, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 249}
+{"t": 1795800287.7886689, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 250}
+{"t": 1795800287.9888637, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 251}
+{"t": 1795800288.1890407, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 252}
+{"t": 1795800288.3892128, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 253}
+{"t": 1795800288.5893853, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 254}
+{"t": 1795800288.7895753, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 255}
+{"t": 1795800288.989774, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 256}
+{"t": 1795800289.1899745, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 257}
+{"t": 1795800289.3904335, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 258}
+{"t": 1795800289.5906348, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 259}
+{"t": 1795800289.7908907, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 260}
+{"t": 1795800289.991075, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 261}
+{"t": 1795800290.191251, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 262}
+{"t": 1795800290.391435, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 263}
+{"t": 1795800290.5916114, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 264}
+{"t": 1795800290.7920454, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 265}
+{"t": 1795800290.9922338, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 266}
+{"t": 1795800291.1924207, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 267}
+{"t": 1795800291.3926032, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 268}
+{"t": 1795800291.5927868, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 269}
+{"t": 1795800291.7930706, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 270}
+{"t": 1795800291.9932694, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 271}
+{"t": 1795800292.1934485, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 272}
+{"t": 1795800292.3936393, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 273}
+{"t": 1795800292.593816, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 274}
+{"t": 1795800292.7939959, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 275}
+{"t": 1795800292.9941635, "adapter": "codex", "pid": 37977, "kind": "tick", "sessionId": "codex-0", "n": 276}
+{"t": 1795800293.0851443, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/cancel", "sessionId": "codex-0"}
+{"t": 1795800293.1942873, "adapter": "codex", "pid": 37977, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "cancelled", "ticks": 276}
+{"t": 1795800296.024498, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "relay 40 kelp"}
+{"t": 1795800296.0248325, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 1}
+{"t": 1795800296.274987, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 2}
+{"t": 1795800296.5251558, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 3}
+{"t": 1795800296.7753103, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 4}
+{"t": 1795800297.0254912, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 5}
+{"t": 1795800297.275666, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 6}
+{"t": 1795800297.525831, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 7}
+{"t": 1795800297.7759984, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 8}
+{"t": 1795800298.0261683, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 9}
+{"t": 1795800298.2763686, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 10}
+{"t": 1795800298.5265505, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 11}
+{"t": 1795800298.7767093, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 12}
+{"t": 1795800299.0268707, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 13}
+{"t": 1795800299.2770376, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 14}
+{"t": 1795800299.5271864, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 15}
+{"t": 1795800299.777331, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 16}
+{"t": 1795800300.0274894, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 17}
+{"t": 1795800300.277664, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 18}
+{"t": 1795800300.5278468, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 19}
+{"t": 1795800300.7780237, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 20}
+{"t": 1795800301.028201, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 21}
+{"t": 1795800301.2783792, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 22}
+{"t": 1795800301.5285668, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 23}
+{"t": 1795800301.77874, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 24}
+{"t": 1795800302.028924, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 25}
+{"t": 1795800302.2791214, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 26}
+{"t": 1795800302.5293145, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 27}
+{"t": 1795800302.7794864, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 28}
+{"t": 1795800303.0296528, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 29}
+{"t": 1795800303.2798285, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 30}
+{"t": 1795800303.5299942, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 31}
+{"t": 1795800303.7801552, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 32}
+{"t": 1795800304.030331, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 33}
+{"t": 1795800304.2805197, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 34}
+{"t": 1795800304.5307004, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 35}
+{"t": 1795800304.7808568, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 36}
+{"t": 1795800305.0310302, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 37}
+{"t": 1795800305.2812023, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 38}
+{"t": 1795800305.5313754, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 39}
+{"t": 1795800305.7815545, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "kelp", "n": 40}
+{"t": 1795800306.0317152, "adapter": "codex", "pid": 37977, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "end_turn", "rows": 40}
+{"t": 1795800316.7160006, "adapter": "codex", "pid": 37977, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "relay 120 reef"}
+{"t": 1795800316.7169828, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 1}
+{"t": 1795800316.9671395, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 2}
+{"t": 1795800317.2173038, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 3}
+{"t": 1795800317.4674819, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 4}
+{"t": 1795800317.717657, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 5}
+{"t": 1795800317.9678187, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 6}
+{"t": 1795800318.2179775, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 7}
+{"t": 1795800318.4681478, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 8}
+{"t": 1795800318.7183044, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 9}
+{"t": 1795800318.9684746, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 10}
+{"t": 1795800319.218628, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 11}
+{"t": 1795800319.4687908, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 12}
+{"t": 1795800319.718953, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 13}
+{"t": 1795800319.969253, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 14}
+{"t": 1795800320.2194219, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 15}
+{"t": 1795800320.469617, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 16}
+{"t": 1795800320.7198055, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 17}
+{"t": 1795800320.9700065, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 18}
+{"t": 1795800321.2201943, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 19}
+{"t": 1795800321.4703639, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 20}
+{"t": 1795800321.7205572, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 21}
+{"t": 1795800321.9707394, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 22}
+{"t": 1795800322.2209237, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 23}
+{"t": 1795800322.4711013, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 24}
+{"t": 1795800322.7212718, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 25}
+{"t": 1795800322.9714427, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 26}
+{"t": 1795800323.2216291, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 27}
+{"t": 1795800323.4717877, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 28}
+{"t": 1795800323.7219284, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 29}
+{"t": 1795800323.9721134, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 30}
+{"t": 1795800324.222278, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 31}
+{"t": 1795800324.4724655, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 32}
+{"t": 1795800324.7226195, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 33}
+{"t": 1795800324.9727843, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 34}
+{"t": 1795800325.2229722, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 35}
+{"t": 1795800325.4731517, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 36}
+{"t": 1795800325.7233303, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 37}
+{"t": 1795800325.9734945, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 38}
+{"t": 1795800326.2236516, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 39}
+{"t": 1795800326.4740565, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 40}
+{"t": 1795800326.7242563, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 41}
+{"t": 1795800326.9744387, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 42}
+{"t": 1795800327.2246306, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 43}
+{"t": 1795800327.4748297, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 44}
+{"t": 1795800327.7250292, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 45}
+{"t": 1795800327.9752007, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 46}
+{"t": 1795800328.2253766, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 47}
+{"t": 1795800328.4755583, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 48}
+{"t": 1795800328.7257972, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 49}
+{"t": 1795800328.975993, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 50}
+{"t": 1795800329.226148, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 51}
+{"t": 1795800329.4763157, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 52}
+{"t": 1795800329.7265077, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 53}
+{"t": 1795800329.9766607, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 54}
+{"t": 1795800330.226825, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 55}
+{"t": 1795800330.4769866, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 56}
+{"t": 1795800330.7271693, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 57}
+{"t": 1795800330.9773426, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 58}
+{"t": 1795800331.2275212, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 59}
+{"t": 1795800331.4776766, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 60}
+{"t": 1795800331.7278414, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 61}
+{"t": 1795800331.9779975, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 62}
+{"t": 1795800332.228167, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 63}
+{"t": 1795800332.4783497, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 64}
+{"t": 1795800332.7285523, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 65}
+{"t": 1795800332.9787478, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 66}
+{"t": 1795800333.228934, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 67}
+{"t": 1795800333.4791043, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 68}
+{"t": 1795800333.729274, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 69}
+{"t": 1795800333.9794734, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 70}
+{"t": 1795800334.2296617, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 71}
+{"t": 1795800334.479839, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 72}
+{"t": 1795800334.7300062, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 73}
+{"t": 1795800334.9801702, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 74}
+{"t": 1795800335.2303383, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 75}
+{"t": 1795800335.4805229, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 76}
+{"t": 1795800335.7306895, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 77}
+{"t": 1795800335.980865, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 78}
+{"t": 1795800336.2310367, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 79}
+{"t": 1795800336.4812114, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 80}
+{"t": 1795800336.7313814, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 81}
+{"t": 1795800336.981574, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 82}
+{"t": 1795800337.2317636, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 83}
+{"t": 1795800337.4819484, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 84}
+{"t": 1795800337.732122, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 85}
+{"t": 1795800337.9823027, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 86}
+{"t": 1795800338.2324708, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 87}
+{"t": 1795800338.4826458, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 88}
+{"t": 1795800338.7328255, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 89}
+{"t": 1795800338.9830081, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 90}
+{"t": 1795800339.233157, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 91}
+{"t": 1795800339.4833195, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 92}
+{"t": 1795800339.7335086, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 93}
+{"t": 1795800339.9836695, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 94}
+{"t": 1795800340.2338188, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 95}
+{"t": 1795800340.4839842, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 96}
+{"t": 1795800340.734151, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 97}
+{"t": 1795800340.9843392, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 98}
+{"t": 1795800341.2345047, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 99}
+{"t": 1795800341.484678, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 100}
+{"t": 1795800341.7348485, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 101}
+{"t": 1795800341.985012, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 102}
+{"t": 1795800342.235177, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 103}
+{"t": 1795800342.4853323, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 104}
+{"t": 1795800342.7355163, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 105}
+{"t": 1795800342.9856977, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 106}
+{"t": 1795800343.2358966, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 107}
+{"t": 1795800343.486063, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 108}
+{"t": 1795800343.7362332, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 109}
+{"t": 1795800343.986431, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 110}
+{"t": 1795800344.2365844, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 111}
+{"t": 1795800344.48674, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 112}
+{"t": 1795800344.736918, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 113}
+{"t": 1795800344.9870906, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 114}
+{"t": 1795800345.2372472, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 115}
+{"t": 1795800345.487412, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 116}
+{"t": 1795800345.7375867, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 117}
+{"t": 1795800345.987757, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 118}
+{"t": 1795800346.2379124, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 119}
+{"t": 1795800346.4880774, "adapter": "codex", "pid": 37977, "kind": "relay", "sessionId": "codex-0", "tag": "reef", "n": 120}
+{"t": 1795800346.7382512, "adapter": "codex", "pid": 37977, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "end_turn", "rows": 120}
+{"t": 1795800377.3942442, "adapter": "claude-code", "pid": 34380, "kind": "stdin_eof"}
+{"t": 1795800377.3943427, "adapter": "claude-code", "pid": 38414, "kind": "stdin_eof"}
+{"t": 1795800377.3958366, "adapter": "codex", "pid": 37977, "kind": "stdin_eof"}

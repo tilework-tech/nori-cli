@@ -1,0 +1,36 @@
+shell$ nori host ls
+   Session                                                                    Agent         Status
+   [32m○ [39mhello there                                                              claude-code   [32mready         [2m[39m
+[0m[39m[49m   [2m  app · tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 t…                24s ago
+[0m[39m[49m   [32m○ [39msecond session ping                                                      claude-code   [32mready         [2m[39m
+[0m[39m[49m   [2m  app · claude-code heard: second session ping                                           3s ago
+[0m[39m[49mshell$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

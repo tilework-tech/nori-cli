@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+  2 failed · 3 ready
+
+                                                                                                                [ auto ]
+〉
+
+  controlling · host-audit · claude-code · ready · Approvals: Agent · ctrl+d detach     ⎇ nori/host-audit-five-goals-...

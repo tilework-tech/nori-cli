@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Codex options: Mode=agent (/config to change)
+
+
+› codex check
+
+
+• codex heard: codex check
+
+
+› hold busy
+
+
+  1 working · 2 ready
+
+• Compiling War and Peace (3s • esc to interrupt)
+
+                                                                                                               [ agent ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · codex · working · Approvals: Agent · ctrl+d detach

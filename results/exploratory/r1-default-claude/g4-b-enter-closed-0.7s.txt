@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› hello there
+
+
+• claude-code heard: hello there
+
+
+› perm please
+
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+
+› hold on
+
+
+• tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 tick 10 tick 11 tick 12
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+  1 ready
+
+                                                                                                                [ auto ]
+〉
+
+  / commands · ! shell · @ files · ? help · controlling · app · claude-code · closed · Approvals: Agent · ctrl+d detach

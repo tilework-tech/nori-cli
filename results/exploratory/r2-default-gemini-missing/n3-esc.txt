@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+■ Failed to start ACP session: Could not find the Antigravity CLI. Suggested fix: install Antigravity from
+https://antigravity.google/cli and add `agy` to PATH
+
+■ session d9222be0-9f24-4eec-a13f-be818381c0b6 has no transcript to resume from
+
+  2 failed · 1 ready
+
+
+〉
+
+  esc esc to edit previous message

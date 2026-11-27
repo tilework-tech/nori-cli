@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› perm boat
+
+
+• This terminal now controls the host.
+
+• Permission: Allow once Paint the boathouse
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+
+› perm again
+
+
+• claude-code permission: {"outcome": "cancelled"}
+
+  3 failed · 3 ready
+
+                                                                                                                [ auto ]
+〉
+
+  ctrl + c again to quit

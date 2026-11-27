@@ -1,0 +1,36 @@
+  tick 260 tick 261 tick 262 tick 263 tick 264 tick 265 tick 266 tick 267 tick 268 tick 269 tick 270 tick 271 tick 272
+  tick 273 tick 274 tick 275 tick 276
+
+[38;5;1m■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at[39m
+[38;5;1mhttps://github.com/tilework-tech/nori-cli/issues[39m
+
+
+[1;2m› [0m[39m[49mrelay 40 kelp
+
+
+[2m• [0m[39m[49m- kelp row 01
+  - kelp row 02
+  - kelp row 03
+  - kelp row 04
+  - kelp row 05
+  - kelp row 06
+  - kelp row 07
+  - kelp row 08
+  - kelp row 09
+  - kelp row 10
+  - kelp row 11
+  - kelp row 12
+  - kelp row 13
+  - kelp row 14
+  - kelp row 15
+  - kelp row 16
+  - kelp row 17
+
+  [2m1 working · 2 ready[0m[39m[49m
+
+[1m[38;2;128;128;128m•[0m[39m[49m [1m[38;2;202;202;202mS[38;2;167;167;167mh[38;2;138;138;138mi[38;2;128;128;128mfting bits left and right[0m[39m[49m [2m(4s • esc to interrupt)[0m[39m[49m
+
+                                                                                                               [2m[ agent ]
+[0;1m[39m[49m〉[0m[39m[49m
+
+  [1m/[0;2m[39m[49m commands · [0;1m[39m[49m![0;2m[39m[49m shell · [0;1m[39m[49m@[0;2m[39m[49m files · [0;1m[39m[49m?[0;2m[39m[49m help · [0m[38;5;2m[49mcontrolling[2m[39m · app · codex · working · Approvals: Agent · ctrl+d detach

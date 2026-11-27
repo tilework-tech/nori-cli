@@ -1,0 +1,25 @@
+{"t": 1795800480.4474406, "adapter": "codex", "pid": 44211, "kind": "spawn", "cwd": "<audit-worktree>", "argv": []}
+{"t": 1795800480.4475286, "adapter": "codex", "pid": 44211, "kind": "request", "method": "initialize"}
+{"t": 1795800480.4476125, "adapter": "codex", "pid": 44211, "kind": "init_delay_start", "seconds": 20.0}
+{"t": 1795800500.4477272, "adapter": "codex", "pid": 44211, "kind": "init_delay_end"}
+{"t": 1795800500.4482057, "adapter": "codex", "pid": 44211, "kind": "request", "method": "session/list", "cwd": "<audit-worktree>"}
+{"t": 1795800500.4486268, "adapter": "codex", "pid": 44211, "kind": "request", "method": "session/new", "cwd": "<audit-worktree>"}
+{"t": 1795800500.4543731, "adapter": "codex", "pid": 44211, "kind": "request", "method": "session/set_config_option", "sessionId": "codex-0", "configId": "mode", "value": "workspace-write"}
+{"t": 1795800557.9094746, "adapter": "codex", "pid": 44211, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "/agents"}
+{"t": 1795800557.9098399, "adapter": "codex", "pid": 44211, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "end_turn"}
+{"t": 1795800596.5200167, "adapter": "opencode", "pid": 46523, "kind": "spawn", "cwd": "<audit-worktree>", "argv": []}
+{"t": 1795800596.5200884, "adapter": "opencode", "pid": 46523, "kind": "request", "method": "initialize"}
+{"t": 1795800596.520326, "adapter": "opencode", "pid": 46523, "kind": "request", "method": "session/list", "cwd": "<audit-worktree>"}
+{"t": 1795800596.5206008, "adapter": "opencode", "pid": 46523, "kind": "request", "method": "session/new", "cwd": "<audit-worktree>"}
+{"t": 1795800601.5515857, "adapter": "claude-code", "pid": 46664, "kind": "spawn", "cwd": "<audit-worktree>", "argv": []}
+{"t": 1795800601.5516524, "adapter": "claude-code", "pid": 46664, "kind": "request", "method": "initialize"}
+{"t": 1795800601.5518763, "adapter": "claude-code", "pid": 46664, "kind": "request", "method": "session/list", "cwd": "<audit-worktree>"}
+{"t": 1795800601.552141, "adapter": "claude-code", "pid": 46664, "kind": "request", "method": "session/new", "cwd": "<audit-worktree>"}
+{"t": 1795800601.5569427, "adapter": "claude-code", "pid": 46664, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795800662.5773103, "adapter": "claude-code", "pid": 46664, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "perm boat"}
+{"t": 1795800714.189949, "adapter": "claude-code", "pid": 46664, "kind": "response", "id": 9000, "body": {"outcome": {"outcome": "selected", "optionId": "allow"}}}
+{"t": 1795800717.0358465, "adapter": "claude-code", "pid": 46664, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "perm again"}
+{"t": 1795800722.5426066, "adapter": "claude-code", "pid": 46664, "kind": "response", "id": 9001, "body": {"outcome": {"outcome": "cancelled"}}}
+{"t": 1795800790.6948268, "adapter": "codex", "pid": 44211, "kind": "stdin_eof"}
+{"t": 1795800790.6949055, "adapter": "opencode", "pid": 46523, "kind": "stdin_eof"}
+{"t": 1795800790.6979916, "adapter": "claude-code", "pid": 46664, "kind": "stdin_eof"}
