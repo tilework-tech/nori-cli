@@ -4,18 +4,20 @@
 //! default Codex onboarding experience. It includes:
 //!
 //! - First-launch detection (`~/.nori/cli/config.toml`)
-//! - Nori-branded welcome screen with ASCII banner
+//! - The first-launch screen: the onigiri welcome above the setup form
+//!   (default agent, permissions, usage stats)
 //! - Nori-branded directory trust prompts
 //! - Nori-branded onboarding screen orchestration
 //!
 //! The onboarding flow is:
-//! 1. First-launch welcome (if `~/.nori/cli/config.toml` doesn't exist)
+//! 1. First-launch setup (if `~/.nori/cli/config.toml` doesn't exist)
 //! 2. Directory trust prompt (if directory not yet trusted)
 
 mod first_launch;
 mod onboarding_screen;
+mod setup_form;
+mod setup_step;
 mod trust_directory;
-mod welcome;
 
 use crossterm::event::KeyEvent;
 
@@ -48,5 +50,5 @@ pub(crate) use onboarding_screen::NoriOnboardingResult;
 pub(crate) use onboarding_screen::NoriOnboardingScreen;
 pub(crate) use onboarding_screen::NoriOnboardingScreenArgs;
 pub(crate) use onboarding_screen::run_nori_onboarding_app;
+pub(crate) use setup_step::NoriSetupStep;
 pub(crate) use trust_directory::NoriTrustDirectoryWidget;
-pub(crate) use welcome::NoriWelcomeWidget;

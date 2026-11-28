@@ -401,9 +401,11 @@ async fn run_ratatui_app(
                 update_action: None,
             });
         }
-        // Trust decisions are persisted by onboarding; reload explicitly so
-        // the resolved policy and active project reflect that decision.
-        if onboarding_result.directory_trust_decision.is_some() {
+        // Trust decisions and first-launch settings are persisted by
+        // onboarding; reload explicitly so the resolved agent, policy and
+        // active project reflect them.
+        if onboarding_result.directory_trust_decision.is_some() || onboarding_result.settings_saved
+        {
             let config = load_config_or_exit(overrides.clone());
             (config, overrides)
         } else {

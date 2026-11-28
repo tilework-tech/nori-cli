@@ -1,0 +1,15 @@
+---
+source: tui/src/nori/onboarding/setup_form/tests.rs
+expression: "render(&form, 90, 16)"
+---
+  Default agent   you can switch any time with /agent
+  › ● Claude Code   signed in
+    ○ Codex         signed in
+    ○ Antigravity   not signed in
+    ○ OpenCode      not signed in
+
+    Permissions    ‹ Agent ›   the agent decides what to ask you about
+    Usage stats    ‹ Share ›   help the Nori team improve the CLI
+                   Counts only. Never your prompts, code, file paths or sessions.
+
+  Enter start   ↑↓ move   ←→ change   q quit

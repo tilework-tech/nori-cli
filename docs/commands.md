@@ -66,7 +66,7 @@ host`, `nori attach`, and `nori exec` read `--agent`, `--cd`, `--add-dir`, and
 | `--dangerously-bypass-approvals-and-sandbox` | | flag | off | Alias `--yolo`. Sets `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` for this run. See [permissions.md](permissions.md). |
 | `--cd` | `-C` | `DIR` | current directory | Working folder of the session. |
 | `--add-dir` | | `DIR` | none | Extra writable root. Repeatable. The TUI exits with an error when the effective `sandbox_mode` is `read-only`. |
-| `--skip-welcome` | | flag | off | Skip the first-launch welcome screen. |
+| `--skip-welcome` | | flag | off | Skip the first-launch welcome and setup form. |
 | `--skip-trust-directory` | | flag | off | Skip the folder trust prompt. Nothing is saved, so the folder keeps the default `approval_policy`. |
 
 ### Prompt sources
