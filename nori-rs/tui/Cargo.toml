@@ -129,6 +129,11 @@ path = "examples/status_card_storybook.rs"
 required-features = ["storybook"]
 
 [[example]]
+name = "notice_storybook"
+path = "examples/notice_storybook.rs"
+required-features = ["storybook"]
+
+[[example]]
 name = "exit_card_storybook"
 path = "examples/exit_card_storybook.rs"
 required-features = ["storybook"]

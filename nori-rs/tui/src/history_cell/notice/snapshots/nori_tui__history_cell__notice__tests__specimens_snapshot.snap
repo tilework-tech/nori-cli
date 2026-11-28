@@ -1,0 +1,304 @@
+---
+source: tui/src/history_cell/notice/tests.rs
+expression: out
+---
+── CLI update · width 80 · active
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is ready. You have 0.30.2.
+  ▎ Tab update when you exit  Esc dismiss
+── CLI update · width 80 · after Tab
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is ready. You have 0.30.2.
+  ▎ ✓ Nori will update when you exit.
+── CLI update · width 80 · after a prompt
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is ready. You have 0.30.2.
+  ▎ To update later, run npm install -g nori-ai-cli@latest
+── ACP adapter update · width 80 · active
+  ▎ Claude Code adapter · update
+  ▎ claude-agent-acp 0.14.0 is out. This project pins 0.12.3.
+  ▎ Tab use 0.14.0 next session  Esc dismiss
+── ACP adapter update · width 80 · after Tab
+  ▎ Claude Code adapter · update
+  ▎ claude-agent-acp 0.14.0 is out. This project pins 0.12.3.
+  ▎ ✓ New Claude Code sessions will start with 0.14.0.
+── ACP adapter update · width 80 · after a prompt
+  ▎ Claude Code adapter · update
+  ▎ claude-agent-acp 0.14.0 is out. This project pins 0.12.3.
+  ▎ To move the pin, edit [acp_adapters.claude-code] version
+── adapter stderr: sign-in · width 80 · active
+  ▎ Claude Code adapter · stderr
+  ▎ Not signed in. Run `claude` and then /login, or set ANTHROPIC_API_KEY.
+  ▎ Esc dismiss
+── adapter stderr: sign-in · width 80 · after a prompt
+  ▎ Claude Code adapter · stderr
+  ▎ Not signed in. Run `claude` and then /login, or set ANTHROPIC_API_KEY.
+── adapter stderr: info · width 80 · active
+  ▎ Codex adapter · stderr
+  ▎ Using the cached model list from 2 hours ago.
+  ▎ Refreshing in the background.
+  ▎ Esc dismiss
+── adapter stderr: info · width 80 · after a prompt
+  ▎ Codex adapter · stderr
+  ▎ Using the cached model list from 2 hours ago.
+  ▎ Refreshing in the background.
+── repo invitation · width 80 · active
+  ▎ nori · invitation
+  ▎ If nori is useful to you, star tilework-tech/nori-cli on GitHub. The repo is
+  ▎ also a starting point for building your own ACP agent or client.
+  ▎ Tab open the repo  Esc dismiss
+── repo invitation · width 80 · after Tab
+  ▎ nori · invitation
+  ▎ If nori is useful to you, star tilework-tech/nori-cli on GitHub. The repo is
+  ▎ also a starting point for building your own ACP agent or client.
+  ▎ ✓ Opened github.com/tilework-tech/nori-cli in your browser.
+── repo invitation · width 80 · after a prompt
+  ▎ nori · invitation
+  ▎ If nori is useful to you, star tilework-tech/nori-cli on GitHub. The repo is
+  ▎ also a starting point for building your own ACP agent or client.
+  ▎ github.com/tilework-tech/nori-cli
+── feature tip · width 80 · active
+  ▎ nori · tip
+  ▎ Press Left on an empty prompt to see your agent sessions. Ctrl+T opens the
+  ▎ full transcript, and /settings changes the rest.
+  ▎ Esc dismiss
+── feature tip · width 80 · after a prompt
+  ▎ nori · tip
+  ▎ Press Left on an empty prompt to see your agent sessions. Ctrl+T opens the
+  ▎ full transcript, and /settings changes the rest.
+── CLI update · width 40 · active
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is ready. You have
+  ▎ 0.30.2.
+  ▎ Tab update when you exit
+  ▎ Esc dismiss
+── CLI update · width 40 · after Tab
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is ready. You have
+  ▎ 0.30.2.
+  ▎ ✓ Nori will update when you exit.
+── CLI update · width 40 · after a prompt
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is ready. You have
+  ▎ 0.30.2.
+  ▎ To update later, run npm install -g
+  ▎ nori-ai-cli@latest
+── ACP adapter update · width 40 · active
+  ▎ Claude Code adapter · update
+  ▎ claude-agent-acp 0.14.0 is out. This
+  ▎ project pins 0.12.3.
+  ▎ Tab use 0.14.0 next session
+  ▎ Esc dismiss
+── ACP adapter update · width 40 · after Tab
+  ▎ Claude Code adapter · update
+  ▎ claude-agent-acp 0.14.0 is out. This
+  ▎ project pins 0.12.3.
+  ▎ ✓ New Claude Code sessions will
+  ▎ start with 0.14.0.
+── ACP adapter update · width 40 · after a prompt
+  ▎ Claude Code adapter · update
+  ▎ claude-agent-acp 0.14.0 is out. This
+  ▎ project pins 0.12.3.
+  ▎ To move the pin, edit
+  ▎ [acp_adapters.claude-code] version
+── adapter stderr: sign-in · width 40 · active
+  ▎ Claude Code adapter · stderr
+  ▎ Not signed in. Run `claude`
+  ▎ and then /login, or set
+  ▎ ANTHROPIC_API_KEY.
+  ▎ Esc dismiss
+── adapter stderr: sign-in · width 40 · after a prompt
+  ▎ Claude Code adapter · stderr
+  ▎ Not signed in. Run `claude`
+  ▎ and then /login, or set
+  ▎ ANTHROPIC_API_KEY.
+── adapter stderr: info · width 40 · active
+  ▎ Codex adapter · stderr
+  ▎ Using the cached model list from 2
+  ▎ hours ago.
+  ▎ Refreshing in the background.
+  ▎ Esc dismiss
+── adapter stderr: info · width 40 · after a prompt
+  ▎ Codex adapter · stderr
+  ▎ Using the cached model list from 2
+  ▎ hours ago.
+  ▎ Refreshing in the background.
+── repo invitation · width 40 · active
+  ▎ nori · invitation
+  ▎ If nori is useful to you, star
+  ▎ tilework-tech/nori-cli on GitHub.
+  ▎ The repo is also a starting point
+  ▎ for building your own ACP agent
+  ▎ or client.
+  ▎ Tab open the repo  Esc dismiss
+── repo invitation · width 40 · after Tab
+  ▎ nori · invitation
+  ▎ If nori is useful to you, star
+  ▎ tilework-tech/nori-cli on GitHub.
+  ▎ The repo is also a starting point
+  ▎ for building your own ACP agent
+  ▎ or client.
+  ▎ ✓ Opened github.com/tilework-tech/
+  ▎ nori-cli in your browser.
+── repo invitation · width 40 · after a prompt
+  ▎ nori · invitation
+  ▎ If nori is useful to you, star
+  ▎ tilework-tech/nori-cli on GitHub.
+  ▎ The repo is also a starting point
+  ▎ for building your own ACP agent
+  ▎ or client.
+  ▎ github.com/tilework-tech/nori-cli
+── feature tip · width 40 · active
+  ▎ nori · tip
+  ▎ Press Left on an empty prompt to see
+  ▎ your agent sessions. Ctrl+T opens
+  ▎ the full transcript, and /settings
+  ▎ changes the rest.
+  ▎ Esc dismiss
+── feature tip · width 40 · after a prompt
+  ▎ nori · tip
+  ▎ Press Left on an empty prompt to see
+  ▎ your agent sessions. Ctrl+T opens
+  ▎ the full transcript, and /settings
+  ▎ changes the rest.
+── CLI update · width 24 · active
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is
+  ▎ ready. You have
+  ▎ 0.30.2.
+  ▎ Tab update when
+  ▎ you exit
+  ▎ Esc dismiss
+── CLI update · width 24 · after Tab
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is
+  ▎ ready. You have
+  ▎ 0.30.2.
+  ▎ ✓ Nori will update
+  ▎ when you exit.
+── CLI update · width 24 · after a prompt
+  ▎ nori CLI · update
+  ▎ Version 0.31.0 is
+  ▎ ready. You have
+  ▎ 0.30.2.
+  ▎ To update later,
+  ▎ run npm install -g
+  ▎ nori-ai-cli@latest
+── ACP adapter update · width 24 · active
+  ▎ Claude Code adapter
+  ▎ · update
+  ▎ claude-agent-acp
+  ▎ 0.14.0 is out. This
+  ▎ project pins 0.12.3.
+  ▎ Tab use 0.14.0 next
+  ▎ session
+  ▎ Esc dismiss
+── ACP adapter update · width 24 · after Tab
+  ▎ Claude Code adapter
+  ▎ · update
+  ▎ claude-agent-acp
+  ▎ 0.14.0 is out. This
+  ▎ project pins 0.12.3.
+  ▎ ✓ New Claude Code
+  ▎ sessions will start
+  ▎ with 0.14.0.
+── ACP adapter update · width 24 · after a prompt
+  ▎ Claude Code adapter
+  ▎ · update
+  ▎ claude-agent-acp
+  ▎ 0.14.0 is out. This
+  ▎ project pins 0.12.3.
+  ▎ To move the
+  ▎ pin, edit
+  ▎ [acp_adapters.claude
+  ▎ -code] version
+── adapter stderr: sign-in · width 24 · active
+  ▎ Claude Code adapter
+  ▎ · stderr
+  ▎ Not signed in.
+  ▎ Run `claude` and
+  ▎ then /login, or set
+  ▎ ANTHROPIC_API_KEY.
+  ▎ Esc dismiss
+── adapter stderr: sign-in · width 24 · after a prompt
+  ▎ Claude Code adapter
+  ▎ · stderr
+  ▎ Not signed in.
+  ▎ Run `claude` and
+  ▎ then /login, or set
+  ▎ ANTHROPIC_API_KEY.
+── adapter stderr: info · width 24 · active
+  ▎ Codex adapter ·
+  ▎ stderr
+  ▎ Using the cached
+  ▎ model list from 2
+  ▎ hours ago.
+  ▎ Refreshing in the
+  ▎ background.
+  ▎ Esc dismiss
+── adapter stderr: info · width 24 · after a prompt
+  ▎ Codex adapter ·
+  ▎ stderr
+  ▎ Using the cached
+  ▎ model list from 2
+  ▎ hours ago.
+  ▎ Refreshing in the
+  ▎ background.
+── repo invitation · width 24 · active
+  ▎ nori · invitation
+  ▎ If nori is useful
+  ▎ to you, star
+  ▎ tilework-tech/
+  ▎ nori-cli on GitHub.
+  ▎ The repo is also a
+  ▎ starting point for
+  ▎ building your own
+  ▎ ACP agent or client.
+  ▎ Tab open the repo
+  ▎ Esc dismiss
+── repo invitation · width 24 · after Tab
+  ▎ nori · invitation
+  ▎ If nori is useful
+  ▎ to you, star
+  ▎ tilework-tech/
+  ▎ nori-cli on GitHub.
+  ▎ The repo is also a
+  ▎ starting point for
+  ▎ building your own
+  ▎ ACP agent or client.
+  ▎ ✓ Opened github.com/
+  ▎ tilework-tech/
+  ▎ nori-cli in your
+  ▎ browser.
+── repo invitation · width 24 · after a prompt
+  ▎ nori · invitation
+  ▎ If nori is useful
+  ▎ to you, star
+  ▎ tilework-tech/
+  ▎ nori-cli on GitHub.
+  ▎ The repo is also a
+  ▎ starting point for
+  ▎ building your own
+  ▎ ACP agent or client.
+  ▎ github.com/
+  ▎ tilework-tech/
+  ▎ nori-cli
+── feature tip · width 24 · active
+  ▎ nori · tip
+  ▎ Press Left on an
+  ▎ empty prompt to see
+  ▎ your agent sessions.
+  ▎ Ctrl+T opens the
+  ▎ full transcript,
+  ▎ and /settings
+  ▎ changes the rest.
+  ▎ Esc dismiss
+── feature tip · width 24 · after a prompt
+  ▎ nori · tip
+  ▎ Press Left on an
+  ▎ empty prompt to see
+  ▎ your agent sessions.
+  ▎ Ctrl+T opens the
+  ▎ full transcript,
+  ▎ and /settings
+  ▎ changes the rest.

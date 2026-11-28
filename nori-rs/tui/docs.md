@@ -277,6 +277,34 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   `/sessions` and the attach list mark the session on screen with
   `(on screen)`. On/off settings show only `(on)` or `(off)`.
 
+## Notice cell (prototype)
+
+`history_cell/notice/` is a design prototype, compiled only for tests and the
+`storybook` feature. The app does not show it yet. It is meant to become the
+one cell for CLI and ACP adapter updates, adapter stderr, and later a repo
+invitation and feature tips.
+
+- `Notice` is an inset quote-rail cell: a dim `▎` rail two columns in, a bold
+  source with a dim kind, a short wrapped message, and, while active, one
+  optional action hint. It uses only bold and dim, no hues.
+- `Notice::from_stderr` makes adapter output inert: escape sequences,
+  control characters, and bidi and zero-width format characters are removed,
+  tabs expanded, and a bare carriage return starts a new row. Output over five
+  lines keeps four plus a `+N more lines` row; a line over 200 characters is
+  cut with `+N more characters`. It never carries an action, and output with
+  no visible text makes no notice.
+- `NoticeSlot` queues notices; the first is active. `handle_key` runs before
+  the composer. Only on an empty, idle prompt (`PromptState`: no running
+  turn, popup, vim or shell mode, or paste burst) and an unmodified key press
+  does Tab invoke the active notice's action (if it has one) and Esc dismiss
+  it; every other key passes through to the composer. `on_submit` settles the
+  active notice and any queued behind it into history ahead of the sent
+  prompt.
+- Fixtures (`NoticeSpecimen` in `notice/fixtures.rs`) are synthetic. The
+  `notice_storybook` example has `--scene gallery|startup`; the scripts in
+  `examples/notice_storybook/` run with `bash` and capture with asciinema and
+  agg, because Ghostty Web renders `▎` and `〉` blank.
+
 ## Tests
 
 | What | Where | Run |
@@ -284,7 +312,7 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
 | Unit and render tests, `insta` snapshots | `#[cfg(test)]` modules, `src/**/snapshots/` | `cargo test -p nori-tui` |
 | vt100 emulator suite | `tests/all.rs`, `tests/suite/` | `cargo test -p nori-tui --features vt100-tests` |
 | Real binary in a PTY | `nori-rs/tui-pty-e2e` | `just test e2e` (repository root) |
-| Visual specimens | `examples/` | `cargo run -p nori-tui --features storybook --example <name>_storybook` (`context`, `status_card`, `exit_card`) |
+| Visual specimens | `examples/` | `cargo run -p nori-tui --features storybook --example <name>_storybook` (`context`, `status_card`, `notice`, `exit_card`) |
 
 Run commands from `nori-rs/` unless noted. Review snapshot changes with
 `cargo insta pending-snapshots -p nori-tui`, then
