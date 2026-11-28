@@ -102,6 +102,9 @@ fn layout_follows_the_terminal_shape() {
         (80, 3),
         (80, 2),
         (20, 4),
+        (57, 42),
+        (90, 60),
+        (40, 30),
     ]
     .into_iter()
     .map(|(w, h)| (w, h, layout(w, h)))
@@ -113,13 +116,16 @@ fn layout_follows_the_terminal_shape() {
             (100, 30, Layout::Side { rows: 18.0 }),
             (80, 24, Layout::Side { rows: 14.0 }),
             (60, 20, Layout::Side { rows: 10.0 }),
-            (40, 16, Layout::Stack { rows: 10.0 }),
-            (30, 10, Layout::Stack { rows: 5.0 }),
+            (40, 16, Layout::Stack { rows: 8.0 }),
+            (30, 10, Layout::Mini),
             (24, 6, Layout::Line),
             (60, 6, Layout::Mini),
             (80, 3, Layout::Mini),
             (80, 2, Layout::Line),
             (20, 4, Layout::Line),
+            (57, 42, Layout::Stack { rows: 20.0 }),
+            (90, 60, Layout::Stack { rows: 33.0 }),
+            (40, 30, Layout::Stack { rows: 13.0 }),
         ]
     );
 }

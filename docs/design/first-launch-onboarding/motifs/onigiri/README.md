@@ -78,8 +78,13 @@ The ball size comes from the terminal size (`layout()` in
 | < 4 rows, area ≥ 30x3 | Hand-pixelled mini onigiri (8x3 cells, `mini.rs`) beside a text wordmark. |
 | smaller | One-line `nori cli v…` header. |
 
-The ball sits beside the block wordmark by default. It moves above a one-line
-text wordmark only when stacking gives a much bigger ball (`img/sizes.png`).
+The ball sits beside the block wordmark in landscape areas. In a portrait area
+(about twice as many rows as columns, measured in cell widths), such as a
+vertical split, or when stacking gives a much bigger ball, the block wordmark
+and caption move under the ball, centred. The wordmark sits two rows below the
+ball: the i dot falls behind the ball and lands in that gap, and a bump's hop
+is drawn in front of the ball. A stacked ball smaller than 7 rows falls back to
+the mini onigiri (`img/sizes.png` predates the portrait stack).
 
 ## Colour tiers (`--tier`, otherwise `COLORTERM` / `TERM`)
 
