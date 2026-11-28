@@ -10,7 +10,6 @@ import math
 import os
 import random
 
-from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
@@ -338,7 +337,7 @@ def find_dots(lines, marker):
 
 def s_rounded():
     lines = [
-        "              @",
+        "                @",
         "╭───╮ ╭───╮ ╭── ╷",
         "│   │ │   │ │   │",
         "╵   ╵ ╰───╯ ╵   ╵",
@@ -520,6 +519,8 @@ def ansi(rows):
 
 
 def main():
+    from PIL import Image, ImageDraw, ImageFont
+
     options = [
         ("1  mochi: half blocks + anti-aliased colour", "any font", [s_halfblock(4.0), s_halfblock(8.0)]),
         ("2  smooth: sextants (2x3 mosaic)", "Ghostty/kitty/WezTerm; not Menlo", [s_sextant(4.0), s_sextant(8.0)]),
