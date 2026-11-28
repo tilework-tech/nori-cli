@@ -10,6 +10,7 @@ use ratatui::layout::Rect;
 use ratatui::widgets::WidgetRef;
 
 use super::AgentChoice;
+use super::Density;
 use super::Permission;
 use super::SetupChoices;
 use super::SetupForm;
@@ -45,6 +46,18 @@ fn render(form: &SetupForm, w: u16, h: u16) -> String {
     let area = Rect::new(0, 0, w, h);
     let mut buf = Buffer::empty(area);
     form.render_ref(area, &mut buf);
+    text(&buf)
+}
+
+fn render_at(form: &SetupForm, density: Density, w: u16) -> String {
+    let area = Rect::new(0, 0, w, form.height(density));
+    let mut buf = Buffer::empty(area);
+    form.render_with(density, area, &mut buf);
+    text(&buf)
+}
+
+fn text(buf: &Buffer) -> String {
+    let (w, h) = (buf.area.width, buf.area.height);
     (0..h)
         .map(|y| {
             (0..w)
@@ -165,4 +178,82 @@ fn saving_writes_only_what_differs_from_the_defaults() {
     .expect("save");
     assert!(read(home.path()).contains("approval_policy = \"untrusted\""));
     assert_eq!(opt_out(home.path()), Some(true));
+}
+
+fn all_agents(signed_in: &[AgentKind]) -> Vec<AgentChoice> {
+    AgentKind::all()
+        .iter()
+        .map(|kind| AgentChoice {
+            kind: *kind,
+            status: if signed_in.contains(kind) {
+                AuthStatus::SignedIn
+            } else {
+                AuthStatus::SignedOut
+            },
+        })
+        .collect()
+}
+
+#[test]
+fn every_density_ends_on_its_last_row() {
+    let form = SetupForm::new(all_agents(&[AgentKind::Codex]), None);
+    let got: Vec<(Density, bool)> = [Density::Full, Density::Compact, Density::Tight]
+        .into_iter()
+        .map(|d| {
+            (
+                d,
+                render_at(&form, d, 90)
+                    .lines()
+                    .last()
+                    .is_some_and(|l| !l.is_empty()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (Density::Full, true),
+            (Density::Compact, true),
+            (Density::Tight, true)
+        ]
+    );
+}
+
+#[test]
+fn compact_form_shows_three_agents_and_how_many_more() {
+    let form = SetupForm::new(all_agents(&[AgentKind::Codex]), None);
+    assert_snapshot!("compact_form", render_at(&form, Density::Compact, 90));
+    assert_snapshot!("tight_form", render_at(&form, Density::Tight, 90));
+}
+
+#[test]
+fn compact_agent_list_scrolls_with_the_cursor() {
+    let mut form = SetupForm::new(all_agents(&[]), None);
+    press(
+        &mut form,
+        &[KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down],
+    );
+    let shown = render_at(&form, Density::Compact, 90);
+    let n = AgentKind::all().len();
+    assert_eq!(
+        [
+            shown.contains(&format!("{} more", 2)),
+            shown.contains(AgentKind::all()[4].display_name()),
+            !shown.contains(AgentKind::all()[0].display_name()),
+            shown.contains(&format!("{} more", n - 5)),
+        ],
+        [true, true, true, true],
+        "{shown}"
+    );
+}
+
+#[test]
+fn compact_list_keeps_the_selected_agent_in_view_when_the_cursor_leaves_it() {
+    let mut form = SetupForm::new(all_agents(&[AgentKind::all()[6]]), None);
+    press(&mut form, &[KeyCode::Down; 2]);
+    let after = render_at(&form, Density::Compact, 90);
+    assert!(
+        after.contains(AgentKind::all()[6].display_name()),
+        "{after}"
+    );
 }

@@ -1,0 +1,26 @@
+---
+source: tui-components/src/onigiri/tests.rs
+expression: "dump(&still(tier, 60, 5))"
+---
+                                                            
+    ▄▀▀▄                                                    
+  ▄▀▀▀▀▀▀▄  nori cli v0.42.0  ~/tidepool                    
+  ▀▀▀▀▀▀▀▀                                                  
+                                                            
+
+000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000102030400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000004030505050506040000070707080000000000090909090909090000090909090909090909090000000000000000000000000000000000000000
+000004060a0a0a0a06040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00 Style::new().fg(Color::Reset).bg(Color::Reset)
+01 Style::new().fg(Color::Indexed(231)).bg(Color::Reset)
+02 Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(231))
+03 Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(254))
+04 Style::new().fg(Color::Indexed(254)).bg(Color::Reset)
+05 Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(236))
+06 Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(254))
+07 Style::new().fg(Color::Reset).bg(Color::Reset).bold()
+08 Style::new().fg(Color::Indexed(71)).bg(Color::Reset).bold()
+09 Style::new().fg(Color::Reset).bg(Color::Reset).dim()
+0a Style::new().fg(Color::Indexed(236)).bg(Color::Indexed(236))

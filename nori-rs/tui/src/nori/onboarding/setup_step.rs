@@ -15,15 +15,23 @@ use nori_harness::AgentKind;
 use nori_tui_components::onigiri::Caption;
 use nori_tui_components::onigiri::Onigiri;
 use nori_tui_components::onigiri::Tier;
+use nori_tui_components::onigiri::intro_fits;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
 use ratatui::widgets::WidgetRef;
+use ratatui::widgets::Wrap;
 
 use super::KeyboardHandler;
 use super::StepState;
 use super::StepStateProvider;
 use super::setup_form::AgentChoice;
+use super::setup_form::Density;
 use super::setup_form::SetupChoices;
 use super::setup_form::SetupForm;
 
@@ -32,6 +40,22 @@ const FADE_ROW: Duration = Duration::from_millis(15);
 /// How long each row stays dim before it is fully drawn.
 const FADE_DIM: Duration = Duration::from_millis(120);
 const FADE_FRAME: Duration = Duration::from_millis(16);
+
+/// Narrowest terminal the setup screen draws in.
+const MIN_WIDTH: u16 = 40;
+/// Rows kept for the welcome above the form, at the least (its one-line
+/// header).
+const MIN_WELCOME: u16 = 1;
+/// Rows the mini onigiri needs above the form.
+const MINI_WELCOME: u16 = 3;
+
+/// How the setup screen fits a terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fit {
+    Form(Density),
+    /// Too small to draw the form; a note asks for a bigger terminal.
+    TooSmall,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Row {
@@ -49,6 +73,8 @@ pub(crate) struct NoriSetupStep {
     fade_at: Cell<Option<Duration>>,
     /// Set by a key pressed before the form was fully drawn.
     skipped: bool,
+    /// Whether the last drawn area was too small for the form.
+    too_small: Cell<bool>,
 }
 
 /// Splits `area` into the welcome above and the form below.
@@ -83,6 +109,7 @@ impl NoriSetupStep {
             started: Instant::now(),
             fade_at: Cell::new(None),
             skipped: false,
+            too_small: Cell::new(false),
         }
     }
 
@@ -90,8 +117,31 @@ impl NoriSetupStep {
         self.form.choices()
     }
 
+    /// The densest form needed: the full form when the welcome above it
+    /// still plays its intro, else the compact one while the mini onigiri
+    /// fits above it, else the tight one.
+    fn fit(&self, area: Rect) -> Fit {
+        let room = |d: Density| area.height.saturating_sub(self.form.height(d));
+        if area.width < MIN_WIDTH || room(Density::Tight) < MIN_WELCOME {
+            Fit::TooSmall
+        } else if intro_fits(split_for(area, self.form.height(Density::Full)).0) {
+            Fit::Form(Density::Full)
+        } else if room(Density::Compact) >= MINI_WELCOME {
+            Fit::Form(Density::Compact)
+        } else {
+            Fit::Form(Density::Tight)
+        }
+    }
+
+    fn density(&self, area: Rect) -> Density {
+        match self.fit(area) {
+            Fit::Form(d) => d,
+            Fit::TooSmall => Density::Tight,
+        }
+    }
+
     fn split(&self, area: Rect) -> (Rect, Rect) {
-        split_for(area, self.form.height())
+        split_for(area, self.form.height(self.density(area)))
     }
 
     fn row(&self, elapsed: Duration, index: u16) -> Row {
@@ -109,8 +159,9 @@ impl NoriSetupStep {
     }
 
     fn fully_shown(&self, elapsed: Duration) -> bool {
+        let rows = self.form.height(Density::Full);
         self.fade_at.get().is_none_or(|at| {
-            elapsed >= at + FADE_ROW * u32::from(self.form.height().saturating_sub(1)) + FADE_DIM
+            elapsed >= at + FADE_ROW * u32::from(rows.saturating_sub(1)) + FADE_DIM
         })
     }
 
@@ -130,6 +181,9 @@ impl NoriSetupStep {
     }
 
     fn handle_key_at(&mut self, elapsed: Duration, key_event: KeyEvent) {
+        if self.too_small.get() {
+            return;
+        }
         if self.fully_shown(elapsed) {
             self.form.handle_key_event(key_event);
         } else if key_event.kind != KeyEventKind::Release {
@@ -139,6 +193,28 @@ impl NoriSetupStep {
     }
 
     fn render_at(&self, elapsed: Duration, area: Rect, buf: &mut Buffer) {
+        let density = match self.fit(area) {
+            Fit::Form(d) => d,
+            Fit::TooSmall => {
+                self.too_small.set(true);
+                let note = format!(
+                    "Make the terminal at least {MIN_WIDTH}×{} to set up Nori.",
+                    self.form.height(Density::Tight) + MIN_WELCOME
+                );
+                let y = area.y + area.height / 2;
+                let line = Rect {
+                    y,
+                    height: area.height - (y - area.y),
+                    ..area
+                };
+                Paragraph::new(Line::from(note.dim()))
+                    .alignment(Alignment::Center)
+                    .wrap(Wrap { trim: true })
+                    .render(line, buf);
+                return;
+            }
+        };
+        self.too_small.set(false);
         let (welcome_area, form_area) = self.split(area);
         let mut welcome = self.welcome.borrow_mut();
         if !self.skipped {
@@ -146,11 +222,11 @@ impl NoriSetupStep {
         }
         welcome.render(elapsed, welcome_area, buf);
         if self.fully_shown(elapsed) {
-            self.form.render_ref(form_area, buf);
+            self.form.render_with(density, form_area, buf);
             return;
         }
         let mut form = Buffer::empty(form_area);
-        self.form.render_ref(form_area, &mut form);
+        self.form.render_with(density, form_area, &mut form);
         for (i, y) in (form_area.y..form_area.bottom()).enumerate() {
             let row = self.row(elapsed, i as u16);
             if row == Row::Hidden {
@@ -204,7 +280,6 @@ mod tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use ratatui::style::Modifier;
-    use ratatui::widgets::WidgetRef;
 
     use super::super::setup_form::AgentChoice;
     use super::NoriSetupStep;
@@ -234,7 +309,7 @@ mod tests {
 
     fn landed() -> Duration {
         Onigiri::new(Tier::True, caption())
-            .landed_at(super::split_for(TALL, step(true).form.height()).0)
+            .landed_at(step(true).split(TALL).0)
             .expect("the intro plays at 110x44")
     }
 
@@ -245,7 +320,7 @@ mod tests {
         step.render_at(at, area, &mut buf);
         let (_, form) = step.split(area);
         let mut want = Buffer::empty(form);
-        step.form.render_ref(form, &mut want);
+        step.form.render_with(step.density(area), form, &mut want);
         (form.y..form.bottom())
             .map(|y| {
                 let mut xs = form.x..form.right();
@@ -329,5 +404,89 @@ mod tests {
             ],
             [true, true]
         );
+    }
+
+    fn all_agents_step() -> NoriSetupStep {
+        NoriSetupStep::new(
+            AgentKind::all()
+                .iter()
+                .map(|kind| AgentChoice {
+                    kind: *kind,
+                    status: AuthStatus::SignedOut,
+                })
+                .collect(),
+            None,
+            caption(),
+            Tier::Ansi16,
+            false,
+        )
+    }
+
+    fn screen(step: &NoriSetupStep, w: u16, h: u16) -> String {
+        let area = Rect::new(0, 0, w, h);
+        let mut buf = Buffer::empty(area);
+        step.render_at(Duration::from_secs(10), area, &mut buf);
+        (0..h)
+            .map(|y| {
+                (0..w)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn shorter_terminals_get_denser_forms() {
+        use super::super::setup_form::Density;
+        use super::Fit;
+        let s = all_agents_step();
+        let got: Vec<((u16, u16), Fit)> = [
+            (110, 44),
+            (100, 30),
+            (80, 24),
+            (80, 16),
+            (80, 12),
+            (80, 9),
+            (80, 8),
+            (39, 30),
+        ]
+        .into_iter()
+        .map(|(w, h)| ((w, h), s.fit(Rect::new(0, 0, w, h))))
+        .collect();
+        assert_eq!(
+            got,
+            vec![
+                ((110, 44), Fit::Form(Density::Full)),
+                ((100, 30), Fit::Form(Density::Compact)),
+                ((80, 24), Fit::Form(Density::Compact)),
+                ((80, 16), Fit::Form(Density::Compact)),
+                ((80, 12), Fit::Form(Density::Tight)),
+                ((80, 9), Fit::Form(Density::Tight)),
+                ((80, 8), Fit::TooSmall),
+                ((39, 30), Fit::TooSmall),
+            ]
+        );
+    }
+
+    #[test]
+    fn setup_screen_at_each_terminal_size() {
+        let s = all_agents_step();
+        for (w, h) in [(100, 30), (80, 24), (80, 16), (80, 12), (80, 9), (36, 8)] {
+            insta::assert_snapshot!(format!("setup_screen_{w}x{h}"), screen(&s, w, h));
+        }
+    }
+
+    #[test]
+    fn keys_do_nothing_while_the_terminal_is_too_small() {
+        let mut s = step(false);
+        let _ = screen(&s, 30, 6);
+        s.handle_key_at(
+            Duration::ZERO,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        );
+        assert_eq!(s.choices(), None);
     }
 }

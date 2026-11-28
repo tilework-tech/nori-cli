@@ -1,0 +1,6 @@
+---
+source: tui/src/nori/onboarding/setup_step.rs
+expression: "screen(&s, w, h)"
+---
+ Make the terminal at least 40×9 to
+            set up Nori.

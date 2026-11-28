@@ -13,6 +13,8 @@ mod save;
 #[cfg(test)]
 mod tests;
 
+use std::cell::Cell;
+
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -76,6 +78,20 @@ pub(crate) struct SetupChoices {
     pub share_usage: bool,
 }
 
+/// How much room the form takes. Shorter terminals get denser forms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Density {
+    /// Every agent listed, with blank rows between sections.
+    Full,
+    /// [`VISIBLE_AGENTS`] agents at a time, with blank rows between sections.
+    Compact,
+    /// [`VISIBLE_AGENTS`] agents at a time, no blank rows.
+    Tight,
+}
+
+/// Agents listed at once by the compact and tight forms.
+const VISIBLE_AGENTS: usize = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Row {
     Agent(usize),
@@ -91,6 +107,8 @@ pub(crate) struct SetupForm {
     share_usage: bool,
     missing_agent: bool,
     done: Option<SetupChoices>,
+    /// First agent listed when only [`VISIBLE_AGENTS`] fit.
+    agent_top: Cell<usize>,
 }
 
 impl SetupForm {
@@ -106,6 +124,7 @@ impl SetupForm {
             share_usage: true,
             missing_agent: false,
             done: None,
+            agent_top: Cell::new(0),
         }
     }
 
@@ -193,9 +212,35 @@ impl StepStateProvider for SetupForm {
 const LABEL_W: usize = 15;
 
 impl SetupForm {
-    /// Rows the form needs.
-    pub(crate) fn height(&self) -> u16 {
-        self.agents.len() as u16 + 9
+    /// Rows the form needs at `density`.
+    pub(crate) fn height(&self, density: Density) -> u16 {
+        let (agents, gaps) = match density {
+            Density::Full => (self.agents.len(), 2),
+            Density::Compact => (self.agents.len().min(VISIBLE_AGENTS), 2),
+            Density::Tight => (self.agents.len().min(VISIBLE_AGENTS), 0),
+        };
+        (agents + gaps + 5) as u16
+    }
+
+    /// The agents listed at `density`, scrolled so the cursor, or else the
+    /// selected agent, is in view.
+    fn agent_window(&self, density: Density) -> std::ops::Range<usize> {
+        let n = self.agents.len();
+        if density == Density::Full || n <= VISIBLE_AGENTS {
+            return 0..n;
+        }
+        let focus = match self.cursor {
+            Row::Agent(i) => i,
+            Row::Permission | Row::Usage => self.selected.unwrap_or(0),
+        };
+        let top = self
+            .agent_top
+            .get()
+            .min(focus)
+            .max((focus + 1).saturating_sub(VISIBLE_AGENTS))
+            .min(n - VISIBLE_AGENTS);
+        self.agent_top.set(top);
+        top..top + VISIBLE_AGENTS
     }
 
     fn pointer(&self, row: Row) -> Span<'static> {
@@ -206,7 +251,9 @@ impl SetupForm {
         }
     }
 
-    fn lines(&self) -> Vec<Line<'static>> {
+    fn lines(&self, density: Density) -> Vec<Line<'static>> {
+        let gap = density != Density::Tight;
+        let window = self.agent_window(density);
         let mut lines = vec![Line::from(vec![
             "  ".into(),
             "Default agent".bold(),
@@ -222,7 +269,11 @@ impl SetupForm {
             .map(|a| a.kind.display_name().len())
             .max()
             .unwrap_or(0);
+        let (hidden_above, hidden_below) = (window.start, self.agents.len() - window.end);
         for (i, agent) in self.agents.iter().enumerate() {
+            if !window.contains(&i) {
+                continue;
+            }
             let radio = if self.selected == Some(i) {
                 "●".green()
             } else {
@@ -234,15 +285,24 @@ impl SetupForm {
                 AuthStatus::SignedOut => "not signed in".dim(),
                 AuthStatus::Unknown => "sign-in not checked".dim(),
             };
-            lines.push(Line::from(vec![
+            let mut line = Line::from(vec![
                 "  ".into(),
                 self.pointer(Row::Agent(i)),
                 radio,
                 name.into(),
                 status,
-            ]));
+            ]);
+            if i == window.start && hidden_above > 0 {
+                line.push_span(format!("   ↑ {hidden_above} more").dim());
+            }
+            if i + 1 == window.end && hidden_below > 0 {
+                line.push_span(format!("   ↓ {hidden_below} more").dim());
+            }
+            lines.push(line);
         }
-        lines.push(Line::from(""));
+        if gap {
+            lines.push(Line::from(""));
+        }
         let choice = |text: String| Span::from(format!("‹ {text} ›"));
         lines.push(Line::from(vec![
             self.pointer(Row::Permission),
@@ -271,7 +331,9 @@ impl SetupForm {
             )
             .dim(),
         ));
-        lines.push(Line::from(""));
+        if gap {
+            lines.push(Line::from(""));
+        }
         lines.push(Line::from(vec![
             "  ".into(),
             "Enter".bold(),
@@ -287,8 +349,14 @@ impl SetupForm {
     }
 }
 
+impl SetupForm {
+    pub(crate) fn render_with(&self, density: Density, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(self.lines(density)).render(area, buf);
+    }
+}
+
 impl WidgetRef for SetupForm {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(self.lines()).render(area, buf);
+        self.render_with(Density::Full, area, buf);
     }
 }

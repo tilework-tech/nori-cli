@@ -40,10 +40,20 @@ one Enter accepts it:
   `$NORI_HOME/.nori-install.json`. Only counts are sent; never prompts, code,
   file paths or sessions.
 
-When the intro plays (terminals about 40 rows and taller), the form unrolls
-downwards once the ball lands (about 1.7 s in); in shorter terminals it shows at once. A key
-pressed before the form is fully drawn shows it at once and is otherwise
-ignored, so an early Enter never submits answers you have not seen.
+The screen fits the terminal height:
+
+- **Full form** (every agent listed) when the welcome above it still has room
+  for the full intro, about 33 rows and up with eight agents.
+- **Compact form**: three agents at a time, with `↑ N more` / `↓ N more`
+  where agents are scrolled out of view, while the mini onigiri fits above it.
+- **Tight form**: the compact form without blank rows, under a one-line
+  header. It needs at least 40x9; smaller terminals show a note asking for a
+  bigger one, and keys other than `q` and `Ctrl+C` do nothing.
+
+When the intro plays, the form unrolls downwards once the ball lands (about
+1.7 s in); otherwise it shows at once. A key pressed
+before the form is fully drawn shows it at once and is otherwise ignored, so
+an early Enter never submits answers you have not seen.
 
 `↑`/`↓` move, `←`/`→` or `Space` change an answer, `q` quits. Nori then asks
 whether you trust the folder and saves the answer per project in
