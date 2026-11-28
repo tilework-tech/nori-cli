@@ -105,8 +105,36 @@ pub(crate) enum AppEvent {
         result: Result<(), String>,
     },
 
-    /// A joined host started this session for `/new`; show it once listed.
-    JoinedSessionStarted(String),
+    /// A joined host started this session for `/new`; show it once listed,
+    /// with `note` added to it.
+    JoinedSessionStarted {
+        id: String,
+        note: Option<String>,
+    },
+
+    /// A joined session that closed here started again under its own ID.
+    JoinedSessionRestarted {
+        generation: SessionGeneration,
+    },
+
+    /// `/agent` on a joined host: start or switch to this agent there.
+    ChooseHostAgent {
+        slug: String,
+        name: String,
+    },
+
+    /// A joined host refused to change this session's agent.
+    HostAgentNotReplaced {
+        session_id: nori_harness::ConversationId,
+        message: String,
+    },
+
+    /// A joined host changed this unprompted session's agent in place.
+    HostAgentReplaced {
+        session_id: nori_harness::ConversationId,
+        slug: String,
+        name: String,
+    },
 
     /// A joined host's folders for the `/new` Tab typed in `generation`'s
     /// composer when it held `text`.

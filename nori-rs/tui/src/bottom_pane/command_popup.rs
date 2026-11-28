@@ -204,6 +204,12 @@ impl CommandPopup {
         for (_, cmd) in self.builtins.iter() {
             if let Some((indices, score)) = fuzzy_match(cmd.command(), filter) {
                 out.push((CommandItem::Builtin(*cmd), Some(indices), score));
+            } else if let Some(score) = crate::slash_command::aliases_of(*cmd)
+                .filter_map(|alias| fuzzy_match(alias, filter).map(|(_, score)| score))
+                .min()
+            {
+                // Matched by an alias: the row shows the builtin's own name.
+                out.push((CommandItem::Builtin(*cmd), None, score));
             }
         }
         // Agent commands with prefix-based display key.
@@ -333,6 +339,7 @@ impl CommandPopup {
         let typed = first_line.trim_start().trim_start_matches('/');
         let typed = typed.split_whitespace().next().unwrap_or("");
         cmd.command().starts_with(typed)
+            || crate::slash_command::aliases_of(cmd).any(|alias| alias.starts_with(typed))
     }
 
     /// The highlighted builtin when it is greyed, so Enter can say why it

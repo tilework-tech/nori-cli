@@ -166,6 +166,7 @@ mod exit_card;
 mod explore_details;
 mod goal_host;
 mod history_host;
+mod host_agents;
 mod host_feed;
 mod host_keys;
 mod host_role;

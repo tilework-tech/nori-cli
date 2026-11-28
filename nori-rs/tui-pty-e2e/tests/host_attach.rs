@@ -27,6 +27,8 @@ use tui_pty_e2e::TuiSession;
 
 const ANSWER: &str = "D2 host agent response";
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(35);
+/// The `/new` row's description, always on the first page of the `/` menu.
+const MENU_ROW: &str = "start a new chat during a conversation";
 
 /// Own the host's home until all clients have been dropped and the host stopped.
 struct Host {
@@ -1018,10 +1020,14 @@ fn attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_t
     let mut watcher = host.attach(Some(&id));
     wait_watching(&mut watcher);
 
-    controller.send_str("/").unwrap();
+    controller.send_str("/resum").unwrap();
     controller
         .wait_for_text("not available in nori attach yet", TIMEOUT)
         .expect("the controller's menu greys commands attach has no screen for");
+    for _ in 0.."resum".len() {
+        controller.send_key(Key::Backspace).unwrap();
+        controller.settle(Duration::from_millis(250));
+    }
     controller.send_str("undo").unwrap();
     controller
         .wait_for_text("not available on this host yet", TIMEOUT)
@@ -1273,21 +1279,19 @@ fn attached_escape_closes_the_menu_first_and_then_interrupts_the_turn() {
 
     client.send_str("/").unwrap();
     client
-        .wait_for_text("not available in nori attach yet", TIMEOUT)
+        .wait_for_text(MENU_ROW, TIMEOUT)
         .expect("the menu opens");
     client.settle(Duration::from_millis(500));
     client
         .press(
             Key::Escape,
-            |screen| !screen.contains("not available in nori attach yet"),
+            |screen| !screen.contains(MENU_ROW),
             "the first Escape closes the menu",
         )
         .unwrap();
     client.settle(Duration::from_millis(1000));
     assert!(
-        !client
-            .screen_contents()
-            .contains("not available in nori attach yet"),
+        !client.screen_contents().contains(MENU_ROW),
         "the menu stays closed"
     );
     assert!(working(&host), "the first Escape leaves the turn running");

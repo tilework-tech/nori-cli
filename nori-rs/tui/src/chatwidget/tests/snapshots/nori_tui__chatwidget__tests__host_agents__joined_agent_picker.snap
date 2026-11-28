@@ -1,0 +1,12 @@
+---
+source: tui/src/chatwidget/tests/host_agents.rs
+expression: render_bottom_pane(&chat)
+---
+  Choose an agent
+  Starts a session with it on this host
+
+  ▏› 1. Amber                                                                ▕
+  ▏     Installed                                                            ▕
+     2. Cedar
+        Adapter not installed. Install the synthetic cedar adapter.
+  ↑↓/j/k move  enter select  esc close

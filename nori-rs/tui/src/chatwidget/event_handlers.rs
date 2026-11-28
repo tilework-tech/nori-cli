@@ -224,6 +224,13 @@ impl ChatWidget {
     fn handle_nori_event(&mut self, event: nori_protocol::NoriEvent) {
         match event {
             nori_protocol::NoriEvent::SessionStarted(started) => {
+                // A joined session that ended here and starts again under its
+                // own ID (its agent changed, or it resumed) comes back.
+                if self.host_connection.is_some() && std::mem::take(&mut self.ended_on_host) {
+                    self.app_event_tx.send(AppEvent::JoinedSessionRestarted {
+                        generation: self.session_generation,
+                    });
+                }
                 self.on_session_started(started);
             }
             nori_protocol::NoriEvent::ExternalTurnChanged(turn) => {
@@ -290,7 +297,11 @@ impl ChatWidget {
                 match ended.reason {
                     // A joined host's session ending leaves this terminal
                     // on the host, like a closed one.
+                    nori_protocol::SessionEndReason::Shutdown
+                        if self.host_connection.is_some()
+                            && self.agent_change.absorb_shutdown() => {}
                     nori_protocol::SessionEndReason::Shutdown if self.host_connection.is_some() => {
+                        self.ended_on_host = true;
                         self.app_event_tx.send(AppEvent::SessionClosed {
                             generation: self.session_generation,
                         });

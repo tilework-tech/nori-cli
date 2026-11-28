@@ -200,7 +200,26 @@ impl App {
             AppEvent::ToggleScreenMode => self.toggle_screen_mode(tui)?,
             AppEvent::TakeHostControl => host.take_control(),
             AppEvent::JoinedSubscribed { id, result } => self.on_joined_subscribed(id, result),
-            AppEvent::JoinedSessionStarted(id) => self.open_when_listed(id),
+            AppEvent::JoinedSessionStarted { id, note } => self.open_when_listed(id, note),
+            AppEvent::JoinedSessionRestarted { generation } => {
+                self.on_joined_session_restarted(generation);
+            }
+            AppEvent::ChooseHostAgent { slug, name } => {
+                self.chat_widget.choose_host_agent(slug, name);
+            }
+            AppEvent::HostAgentNotReplaced {
+                session_id,
+                message,
+            } => self.with_joined_widget(session_id, |widget| {
+                widget.on_host_agent_not_replaced(message);
+            }),
+            AppEvent::HostAgentReplaced {
+                session_id,
+                slug,
+                name,
+            } => self.with_joined_widget(session_id, |widget| {
+                widget.on_host_agent_replaced(slug, name);
+            }),
             AppEvent::HostFoldersFound {
                 generation,
                 text,

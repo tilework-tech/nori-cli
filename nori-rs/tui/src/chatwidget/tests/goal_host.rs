@@ -283,6 +283,7 @@ async fn a_watcher_reads_the_goal_but_cannot_change_it() {
             goal: true,
             ..crate::host_client::HostFeatures::default()
         },
+        agents: Vec::new(),
     });
     while rx.try_recv().is_ok() {}
 

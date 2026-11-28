@@ -5,6 +5,7 @@
 //! module names the host methods a frontend calls and matches each reply to
 //! the frontend's own tag for that call.
 
+pub(crate) mod agents;
 mod connection;
 mod file_search;
 pub(crate) mod new_session;
@@ -62,6 +63,9 @@ pub(crate) struct HostConnection {
     /// Why the host can no longer serve this terminal, once it cannot.
     pub stopped: Option<String>,
     pub features: HostFeatures,
+    /// The ACP agent servers the host can start, as its `initialize` reply
+    /// listed them.
+    pub agents: Vec<agents::HostAgent>,
 }
 
 /// What the connected host can do, from its `initialize` reply.
@@ -91,6 +95,9 @@ pub(crate) struct HostFeatures {
     pub compact: bool,
     /// `_nori/session/shell` runs `!` commands on the host.
     pub shell: bool,
+    /// The host lists the ACP agent servers it can start, each with whether
+    /// it can start now, in its `initialize` reply.
+    pub agents: bool,
 }
 
 impl HostConnection {
@@ -111,7 +118,9 @@ impl HostConnection {
                 context: true,
                 compact: true,
                 shell: true,
+                agents: true,
             },
+            agents: Vec::new(),
         }
     }
 }
@@ -201,6 +210,14 @@ pub(crate) enum HostCall {
     },
     DiscardPrepared {
         selection: String,
+    },
+    /// Change one of a session's ACP configuration options, including the
+    /// host's own `agent` option before the first prompt. Only a controller
+    /// may.
+    SetConfigOption {
+        session_id: String,
+        config_id: String,
+        value: String,
     },
     /// Change one session's permission mode. Only a controller may.
     SetMode {
@@ -373,6 +390,14 @@ impl HostCall {
             Self::DiscardPrepared { selection } => {
                 ("_nori/host/discard_agent", json!({"id": selection}))
             }
+            Self::SetConfigOption {
+                session_id,
+                config_id,
+                value,
+            } => (
+                "session/set_config_option",
+                json!({"sessionId": session_id, "configId": config_id, "value": value}),
+            ),
             Self::SetMode { session_id, mode } => (
                 "session/set_mode",
                 json!({"sessionId": session_id, "modeId": mode}),

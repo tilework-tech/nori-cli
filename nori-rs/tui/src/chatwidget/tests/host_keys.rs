@@ -18,6 +18,7 @@ fn joined(role: ControlRole, connected: bool) -> HostConnection {
         connected,
         stopped: None,
         features: crate::host_client::HostFeatures::default(),
+        agents: Vec::new(),
     }
 }
 

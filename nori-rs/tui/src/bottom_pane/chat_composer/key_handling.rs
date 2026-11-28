@@ -869,9 +869,7 @@ impl ChatComposer {
                 let first_line = self.textarea.text().lines().next().unwrap_or("");
                 if let Some((name, rest)) = parse_slash_name(first_line)
                     && rest.is_empty()
-                    && let Some((_n, cmd)) = built_in_slash_commands()
-                        .into_iter()
-                        .find(|(n, _)| *n == name)
+                    && let Some(cmd) = crate::slash_command::builtin_named(name)
                 {
                     self.textarea.set_text("");
                     return (InputResult::Command(cmd), true);
@@ -938,13 +936,9 @@ impl ChatComposer {
                             && crate::chatwidget::JOINED_COMMANDS.contains(&name)
                             && _rest.is_empty())
                         || (self.pass_unknown_commands
-                            && !built_in_slash_commands()
-                                .into_iter()
-                                .any(|(command_name, _)| command_name == name));
+                            && crate::slash_command::builtin_named(name).is_none());
                     if !treat_as_plain_text {
-                        let is_builtin = built_in_slash_commands()
-                            .into_iter()
-                            .any(|(command_name, _)| command_name == name);
+                        let is_builtin = crate::slash_command::builtin_named(name).is_some();
                         let prompt_prefix = format!("{PROMPTS_CMD_PREFIX}:");
                         let is_known_prompt = name
                             .strip_prefix(&prompt_prefix)

@@ -48,6 +48,8 @@ pub(crate) struct JoinedSessions {
     rows: HashMap<ConversationId, ListedSession>,
     /// A session this terminal's `/new` started, shown once listed.
     started: Option<ConversationId>,
+    /// What to add to that session once it is on screen.
+    started_note: Option<String>,
     /// The hint for a terminal with no session on screen was shown.
     told_no_session: bool,
 }
@@ -170,6 +172,7 @@ impl App {
             open_session,
             rows: HashMap::new(),
             started: None,
+            started_note: None,
             told_no_session: false,
         });
         (app, app_event_rx)
@@ -349,7 +352,7 @@ impl App {
     }
 
     /// The session `/new` started, shown as soon as the host lists it.
-    pub(super) fn open_when_listed(&mut self, id: String) {
+    pub(super) fn open_when_listed(&mut self, id: String, note: Option<String>) {
         let Ok(id) = ConversationId::from_string(&id) else {
             self.chat_widget.add_error_message(format!(
                 "The host started a session with an unknown ID: {id}"
@@ -358,8 +361,44 @@ impl App {
         };
         if let Some(joined) = self.joined.as_mut() {
             joined.started = Some(id);
+            joined.started_note = note;
         }
         self.show_started_session();
+    }
+
+    /// A session that closed here started again on the host under its own
+    /// ID. If nothing replaced it on screen, it comes back.
+    pub(super) fn on_joined_session_restarted(
+        &mut self,
+        generation: crate::app_event::SessionGeneration,
+    ) {
+        let nothing_on_screen = self.chat_widget.managed_conversation_id().is_none()
+            && !self.chat_widget.session_list_in_front();
+        if nothing_on_screen && self.session_deck.parked(generation).is_some() {
+            self.show_session(generation);
+        }
+    }
+
+    /// Run `apply` on the widget following `id`, on screen or parked.
+    pub(super) fn with_joined_widget(
+        &mut self,
+        id: ConversationId,
+        apply: impl FnOnce(&mut ChatWidget),
+    ) {
+        if self.chat_widget.managed_conversation_id() == Some(id) {
+            apply(&mut self.chat_widget);
+            return;
+        }
+        let Some(generation) = self
+            .joined
+            .as_ref()
+            .and_then(|joined| joined.feed.generation_of(id))
+        else {
+            return;
+        };
+        if let Some(parked) = self.session_deck.parked_mut(generation) {
+            apply(&mut parked.widget);
+        }
     }
 
     fn show_started_session(&mut self) {
@@ -374,7 +413,11 @@ impl App {
             return;
         };
         joined.started = None;
+        let note = joined.started_note.take();
         self.show_session(generation);
+        if let Some(note) = note {
+            self.chat_widget.add_info_message(note, None);
+        }
     }
 
     /// The hint row names the host's status for the session on screen. With
