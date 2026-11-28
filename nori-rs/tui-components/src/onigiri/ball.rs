@@ -86,6 +86,13 @@ impl Paint<'_> {
         }
     }
 
+    /// Set only the background of cell (`x`, `y`), clipped to the area.
+    pub fn tint(&mut self, x: i32, y: i32, bg: Color) {
+        if let Some(c) = self.inside(x, y).and_then(|at| self.buf.cell_mut(at)) {
+            c.set_bg(bg);
+        }
+    }
+
     pub fn tier(&self) -> Tier {
         self.pal.tier
     }

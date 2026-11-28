@@ -5,8 +5,10 @@
 //! pressed, the nori band wraps, then a light circles the rice. Smaller areas
 //! get the settled ball, and the light keeps circling while the ball is big
 //! enough to carry grain texture. Areas too small for a ball get a one-line
-//! text wordmark. Colour adapts to truecolor, 256 and ANSI 16
-//! ([`Tier::detect`]).
+//! text wordmark. Beside the ball, the `nori` wordmark is drawn in rounded
+//! box-drawing lines: a pen writes it, each letter ignites like neon, the i
+//! dot drops in, and a shimmer then follows the light (see `word`). Colour
+//! adapts to truecolor, 256 and ANSI 16 ([`Tier::detect`]).
 //!
 //! The caller owns the frame loop: call [`Onigiri::render`] with the time since
 //! the welcome started and schedule the next frame from
@@ -37,6 +39,8 @@ mod word;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod word_tests;
 
 use std::time::Duration;
 
@@ -54,7 +58,6 @@ use geometry::Place;
 use layout::INTRO_ROWS;
 pub use layout::Layout;
 use layout::TEXTURE_ROWS;
-use layout::WORD_RATIO;
 pub use layout::layout;
 use lighting::Light;
 use timeline::INTRO_FRAME;
@@ -95,15 +98,14 @@ impl Scene {
             Layout::Side { rows } => {
                 let s = Place::size_for(rows);
                 let ball_w = Place::width(s);
-                let scale = rows * WORD_RATIO;
-                let total = ball_w + 0.2 * rows + 3.0 + word::WORD_W * scale;
+                let total = ball_w + 0.2 * rows + 3.0 + word::width_for(rows);
                 let ox = f32::from(area.x) + (f32::from(area.width) - total) / 2.0;
                 let top = i32::from(area.y)
                     + ((f32::from(area.height) - rows - 2.0) / 2.0).round() as i32;
                 let place = Place::with_rows(ox + ball_w / 2.0, top, rows);
                 let base = place.base().round() as i32;
                 let left = (ox + ball_w + 0.2 * rows + 3.0).round() as i32;
-                let word = Word::new(left, base - (9.0 * scale).round() as i32, scale);
+                let word = Word::new(left, (base - 1).div_euclid(2), rows);
                 Scene::Side {
                     rows,
                     ball: Ball::new(place, rows >= TEXTURE_ROWS, intro && rows >= INTRO_ROWS),
@@ -202,9 +204,17 @@ impl Onigiri {
             } => {
                 let intro = !settled && *rows >= INTRO_ROWS;
                 let tw = if intro { t } else { 1.0e6 };
-                let light = Light::at(t, !settled && *rows >= TEXTURE_ROWS);
+                let animate = !settled && *rows >= TEXTURE_ROWS;
+                let light = Light::at(t, animate);
                 ball.draw(&mut p, t, intro, &light);
-                word.draw(&mut p, tw);
+                // Past the intro the wordmark, like the light, only changes
+                // on the light's tick.
+                let tick = if t >= SETTLED_AT {
+                    (t / LIGHT_TICK).floor() * LIGHT_TICK
+                } else {
+                    t
+                };
+                word.draw(&mut p, tick, intro, &light, animate);
                 if tw >= word::VERSION_AT {
                     let (left, y) = (*left, *base / 2 + 1);
                     p.put(left, y, "cli", Style::default());

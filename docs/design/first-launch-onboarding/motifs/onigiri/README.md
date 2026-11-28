@@ -5,7 +5,8 @@ tests and the demo runner). This folder keeps the design notes and renders.
 
 A rice ball with a square nori band. Grains gather, get pressed, and get wrapped,
 then a light circles the ball for as long as the welcome is on screen. The
-wordmark beside it is the v1 placeholder and gets redrawn next.
+`nori` wordmark beside it is drawn in rounded box-drawing lines (style 9 from
+`../../wordmark/`).
 
 ## Timeline
 
@@ -14,8 +15,27 @@ wordmark beside it is the v1 placeholder and gets redrawn next.
 | 0–860 | Grains (Braille dots) fly in from a looser cloud of the same shape. |
 | 860–980 | Press: the solid ball grows from the centre, squashes 10%, and rebounds. |
 | 1080–1460 | The nori band wraps up from the base, one row at a time. |
-| 1320–1980 | Placeholder wordmark sets in, then the green i dot drops. |
+| 1250–2250 | A pen writes `n`, `o`, `r`, `i` in half-cell steps, leaving unlit glass. |
+| per letter | Each finished letter ignites with a neon stutter (330 ms), glows, then cools over 0.9 s. |
+| 2400–2950 | The green i dot falls, squashes, bounces, and ripples down the stem. |
 | 1900→ | The light eases up to speed over 1.2 s, then turns once every 6 s. |
+| 3400→ | A shimmer runs across the wordmark and back once per turn of the light. |
+
+## Wordmark
+
+Code in `tui-components/src/onigiri/word/`. Every timing and strength is a
+constant in `word/motion.rs`; letter proportions are in `word/letters.rs`.
+
+- Letter height is 0.28 of the ball height (at least 2 rows); widths, gaps and
+  the i dot size scale from it.
+- The shimmer's position is the light's own left/right direction, so it is in
+  sync with the rice by construction. Its leading edge is short and white, its
+  tail long and green, and it leans by `SLANT`.
+- Glow is a background tint around lit strokes, baked per size. It assumes the
+  dark background it was designed on. ANSI 16 has no glow; there the resting
+  wordmark uses the theme's own foreground and the shimmer is green and bold.
+- 256 colours step the glow through hand-picked greys and green (233/234/22).
+- Renders: `img/wordmark/` (100x30 in all three tiers, and `tiers.png`).
 
 ## Lighting
 

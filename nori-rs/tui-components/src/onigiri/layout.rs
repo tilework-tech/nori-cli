@@ -10,8 +10,6 @@ pub(crate) const TEXTURE_ROWS: f32 = 7.0;
 /// Smallest ball (rows) worth drawing at all; below it, a one-line header.
 const MIN_ROWS: f32 = 4.0;
 const MAX_ROWS: f32 = 34.0;
-/// Wordmark x-height as a fraction of the ball height.
-pub(crate) const WORD_RATIO: f32 = 1.0 / 13.6;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Layout {
@@ -40,9 +38,10 @@ fn fit(ok: &dyn Fn(f32) -> bool) -> f32 {
 pub fn layout(w: u16, h: u16) -> Layout {
     let (w, h) = (f32::from(w), f32::from(h));
     let ball_w = |r: f32| Place::width(Place::size_for(r));
-    let word_w = |r: f32| word::WORD_W * r * WORD_RATIO;
     let side = fit(&|r| {
-        ball_w(r) + 0.2 * r + 3.0 + word_w(r) <= w - 10.0 && r <= 0.62 * h && r + 3.0 <= h - 2.0
+        ball_w(r) + 0.2 * r + 3.0 + word::width_for(r) <= w - 10.0
+            && r <= 0.62 * h
+            && r + 3.0 <= h - 2.0
     });
     let stack = fit(&|r| ball_w(r) <= w - 4.0 && r <= 0.66 * h && r + 4.0 <= h - 1.0);
     // Side by side reads best; stack only when it buys a much bigger ball.

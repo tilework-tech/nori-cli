@@ -1,0 +1,188 @@
+---
+source: tui-components/src/onigiri/word_tests.rs
+expression: "dump(&intro(tier, 100, 30, 6750))"
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                           ▗▄▟⠻⠃⢃⡄⠰⢀▄▖                                                              
+                         ▗▟⡄⣿⠃⢀▀⠈⢰▀⠸⠈⠃⡄▖                                                            
+                        ▄⢳⣄▀⠃⠃⠸⠈⠃⣌⣄⣄⡄▀▀⡷▙▖                                                          
+                      ▗▟⡌⠻⡄⡇⢃⠰⠃⡇⠻⠸⡄⡌▀⠳⡄▀⠃▀▄                                                         
+                     ▟⢀⠳⢃⢰⠰⠃⠈⠰⣏▀⠋⣄⠃⡼⠋⡄⠃⠃▀⠰⢃▙▖                                                       
+                   ▗⡄⠰⠈⠈⢋⢈⢀⢳⢰⠰⡴⡄⣇⢈⡇⢀⠰⢀⡴⢀⠃⠃⠈▀▀▄                                                      
+                  ▟⣄⠰⢃⠋▀⠰⡇⡌⠳⠈⢰⡄⣌⠸⠋⡄⡇⡄⢋⡄⠃⢰⠃⠰▀▀⣌▙▖                                                    
+                ▗▟⢳⢃⠰⠋⢀▀⠰⠈⠰⡄⠰⠈⢀⢃⡄⠃⣄⢻⠃⠋⡄⡄⠸⢀⠳▀⡄⠈▀▀▄                                                   
+               ▗⢃⡼⡴⠋⣴⠳⠳⢃⢀⠃▀⢀▀▀⢈⢻⠰⣄⠈⢸⢀⢀⣴⣷⠃⠋⢰⠃⢰▀⡄⠃⢀▙                                                  
+              ▟⡄⠸⠸⠋⠋⡌⠰⢀⠰⡄⡄⠰⠸⠃⠰⡄⡏⠃⢈⠰⠃⢻⢈⡼⢀▀⣌⠈▀⠈⢀▀⢀▀⠈▙▖                                                
+             ▟⠳⠰▀⠰▀⠳⠃⠈⡼⣄⢰⣴⢳⢸⡄⠳⠰⠃⠰⠃⠃⡄⠸⢈⣄⣌⡇⠃⡄⢀⠸⠸⠳⢋⡌▀⢀⠃▖                                               
+           ▗▟⡄▀⡇⢃⡇⠃⠳⡄⠰⠸⡏⠈⡿⢀⢈⣄⠃⠰⠳⠳⠰▀⠋⢃⠸⡌⠻⢈⠰⢃⡌⠈⠰⠃⠰⣄▀⡌⢀⡄▖                                              
+          ▗⢀⠸⠻⠰⠸⡌⣴⣄⡼⢀⠳⠰⡴▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⠃⠋▀⠃⠰⠰⠃⡏⡄▀⠸▀▀▄                                   ■         
+         ▗⠳⠈⢀⡄▀⠈▀⡄⡼⡴⠸⠳⡇⡇▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⢈▀⠳⡷⡌⡄▀⢀⠰⠃▀⡄▀⠃▌       ╭──────╮  ╭──────╮  ╭────  ╷         
+         ▐⣴⣄⡼⠰⡄⠃⠃⣴⢀⠃⡴⣴⣷⣴▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⡼⡷⠸⡄⠸⡷⠳⠃⠈⠰⡷⢀▀⠰▀       │      │  │      │  │      │         
+         ▝⠈⠈⠰⠰⠈⢰⠈⡿⠈⣄⡴⢈⡿⣇▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⡄⠰⢳⠈▀⢀⢰⠈⠰▀⠰⢳⢀⢃▛       │      │  │      │  │      │         
+          ▝⢋⢃▀⢀⡏▀⠰⡄⡌▀⠸▀⡿▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⡇▀⢈⡴▀⡏⢸⡴⠃⡄⣇⠋⠳▛        │      │  │      │  │      │         
+            ▀▜⠈▀▀▀▀⢳⠰▀⣄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⡷⣇⡌⢀▀⠰⠈⡄⡷⣌⡄▀▘         ╵      ╵  ╰──────╯  ╵      ╵         
+                                                                                                    
+                                                               cli v0.42.0  ~/tidepool              
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000001020304040504060407070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000000801090a0a0a0b0c040d04040e0407000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000f0g0h0i0j0k0k0l0m0h0a0n040d0d04070f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000080o0p0q0r0k0s0t0u0v0u0g0m0w0x04040d060d07000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000010y0h0g0k0s0u0v0z0z0A0v0u0B0m0C0D0E040d0404070o00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000080F0G0H0p0u0u0v0I0z0J0J0z0z0u0p0l0K0q0C0a0E04040d0d07000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000030p0h0j0s0L0M0N0z0z0O0O0I0J0z0I0v0k0k0g0F0C0h0a040d0d04070f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000080o0s0F0k0s0P0Q0R0I0J0A0I0S0T0S0J0z0I0v0u0k0j0F0q0h0a0b04060d0d07000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000080k0q0k0u0u0N0I0J0O0R0U0V0W0W0V0X0V0I0J0z0v0Y0p0j0Z0F100h0a11040405070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000030u0F0p0M0v0I0I0J0O120V0X0V0X0W13130T0T0J0I0z0u0v0u140j0F090h0a11040d0c070o000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000o0s0l0M0L0A0I0O0O0J0S0X0X0X130V13131516130X0W0O0I0z0u0Y0k0j0g0m10170E040d0404010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000008180P0r0v0v0z0z0J0J190X0X0X131a1b1a1515151515161a0V0V0O0I0v0G0u0k0g1c0q0C0a0d041d040700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000001e0k0u0k0u0I0z0J0I0S0X0X16151f1f1g1g1g1g1g1g1g1g1g1g1g1f1f1h1h0I0I0L1i0k1j0q0h0D11040d0d07000000000000000000001k1k1k1k1k1k00001k1k1k1k000000000000000000000000001l000000000000000000
+0000000000000000001m0u0u0L0u0A1n0A0S0V151o1p1q1q1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1o1r1a0T0v0u1s0m0h0a11040d0407000000000000001t1u1v1w1x1y1x1x1k1k1z1A1u1u1t1t1B1800001818181818000018000000000000000000
+0000000000000000001e1a0J151C1a1a1D1E1F1G1H1H1G1G1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1G1G1F1I1o150V0I1J1K101L110c1M000000000000001t1k1k1k1k1k1N1w1k1k1u1k1k000000001800001800000000000018000000000000000000
+0000000000000000001O1P1P1Q1q1Q1H1R1R1G1F1F1F1F1F1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1g1I1F1F1I1I1F1q1o1S0U0M0k1T0q01000000000000001u1k0000001k1k1U1k1k1u1k00000000001800001800000000000018000000000000000000
+000000000000000000001V1F1Q1I1G1F1I1F1Q1Q1I1Q1I1Q1W1W1W1W1W1W1W1W1W1W1W1W1W1W1W1W1W1Q1I1Q1Q1I1Q1Q1q1E1o0O0u0u0o00000000000000001u1k000000001k1U1k1k1u1k1k000000001800001800000000000018000000000000000000
+0000000000000000000000001V1V1G1I1I1I1I1Q1Q1I1Q1I1h1h1h1h1h1h1h1h1h1h1h1h1h1h1h1h1h1Q1Q1Q1Q1I1Q1Q1q1q1a1D080800000000000000001k1t1k000000001k1X1k1k1u1u1t1t1B18181800001800000000000018000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001Y1Y1Y1Y1Y1Y1Y00001Y1Y1Y1Y1Y1Y1Y1Y1Y1Y0000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00 Style::new().fg(Color::Reset).bg(Color::Reset)
+01 Style::new().fg(Color::Indexed(247)).bg(Color::Reset)
+02 Style::new().fg(Color::Indexed(245)).bg(Color::Reset)
+03 Style::new().fg(Color::Indexed(246)).bg(Color::Reset)
+04 Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(102))
+05 Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(102))
+06 Style::new().fg(Color::Indexed(247)).bg(Color::Indexed(102))
+07 Style::new().fg(Color::Indexed(102)).bg(Color::Reset)
+08 Style::new().fg(Color::Indexed(252)).bg(Color::Reset)
+09 Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(248))
+0A Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(252))
+0B Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(249))
+0C Style::new().fg(Color::Indexed(246)).bg(Color::Indexed(247))
+0D Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(246))
+0E Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(245))
+0F Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(145))
+0G Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(251))
+0H Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(145))
+0I Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(252))
+0J Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(252))
+0K Style::new().fg(Color::Indexed(249)).bg(Color::Indexed(145))
+0L Style::new().fg(Color::Indexed(251)).bg(Color::Indexed(251))
+0M Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(251))
+0N Style::new().fg(Color::Indexed(247)).bg(Color::Indexed(252))
+0O Style::new().fg(Color::Indexed(145)).bg(Color::Indexed(252))
+0P Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(251))
+0Q Style::new().fg(Color::Indexed(251)).bg(Color::Indexed(252))
+0R Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(252))
+0S Style::new().fg(Color::Indexed(145)).bg(Color::Indexed(188))
+0T Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(188))
+0U Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(188))
+0V Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(188))
+0W Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(188))
+0X Style::new().fg(Color::Indexed(249)).bg(Color::Indexed(188))
+0Y Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(251))
+0Z Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(249))
+0a Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(246))
+0b Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(246))
+0c Style::new().fg(Color::Indexed(251)).bg(Color::Indexed(102))
+0d Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(102))
+0e Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(102))
+0f Style::new().fg(Color::Indexed(248)).bg(Color::Reset)
+0g Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(249))
+0h Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(247))
+0i Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(249))
+0j Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(250))
+0k Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(250))
+0l Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(249))
+0m Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(248))
+0n Style::new().fg(Color::Indexed(145)).bg(Color::Indexed(102))
+0o Style::new().fg(Color::Indexed(145)).bg(Color::Reset)
+0p Style::new().fg(Color::Indexed(246)).bg(Color::Indexed(250))
+0q Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(248))
+0r Style::new().fg(Color::Indexed(249)).bg(Color::Indexed(250))
+0s Style::new().fg(Color::Indexed(246)).bg(Color::Indexed(251))
+0t Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(251))
+0u Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(251))
+0v Style::new().fg(Color::Indexed(247)).bg(Color::Indexed(251))
+0w Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(247))
+0x Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(246))
+0y Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(250))
+0z Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(252))
+10 Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(247))
+11 Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(245))
+12 Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(252))
+13 Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(188))
+14 Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(250))
+15 Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(253))
+16 Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(253))
+17 Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(246))
+18 Style::new().fg(Color::Indexed(250)).bg(Color::Reset)
+19 Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(188))
+1A Style::new().fg(Color::Indexed(115)).bg(Color::Indexed(234))
+1B Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(233))
+1C Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(253))
+1D Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(254))
+1E Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(254))
+1F Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(255))
+1G Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(255))
+1H Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(231))
+1I Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(255))
+1J Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(250))
+1K Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(145))
+1L Style::new().fg(Color::Indexed(246)).bg(Color::Indexed(246))
+1M Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(247))
+1N Style::new().fg(Color::Reset).bg(Color::Indexed(234))
+1O Style::new().fg(Color::Indexed(254)).bg(Color::Reset)
+1P Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(254))
+1Q Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(255))
+1R Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(231))
+1S Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(253))
+1T Style::new().fg(Color::Indexed(247)).bg(Color::Indexed(247))
+1U Style::new().fg(Color::Indexed(194)).bg(Color::Indexed(233))
+1V Style::new().fg(Color::Indexed(255)).bg(Color::Reset)
+1W Style::new().fg(Color::Indexed(236)).bg(Color::Indexed(234))
+1X Style::new().fg(Color::Indexed(158)).bg(Color::Indexed(233))
+1Y Style::new().fg(Color::Reset).bg(Color::Reset).dim()
+1a Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(253))
+1b Style::new().fg(Color::Indexed(251)).bg(Color::Indexed(253))
+1c Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(145))
+1d Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(102))
+1e Style::new().fg(Color::Indexed(188)).bg(Color::Reset)
+1f Style::new().fg(Color::Indexed(234)).bg(Color::Indexed(236))
+1g Style::new().fg(Color::Indexed(236)).bg(Color::Indexed(236))
+1h Style::new().fg(Color::Indexed(234)).bg(Color::Indexed(234))
+1i Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(250))
+1j Style::new().fg(Color::Indexed(145)).bg(Color::Indexed(145))
+1k Style::new().fg(Color::Reset).bg(Color::Indexed(233))
+1l Style::new().fg(Color::Indexed(71)).bg(Color::Reset)
+1m Style::new().fg(Color::Indexed(253)).bg(Color::Reset)
+1n Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(252))
+1o Style::new().fg(Color::Indexed(251)).bg(Color::Indexed(254))
+1p Style::new().fg(Color::Indexed(188)).bg(Color::Indexed(254))
+1q Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(255))
+1r Style::new().fg(Color::Indexed(253)).bg(Color::Indexed(254))
+1s Style::new().fg(Color::Indexed(145)).bg(Color::Indexed(250))
+1t Style::new().fg(Color::Indexed(151)).bg(Color::Indexed(233))
+1u Style::new().fg(Color::Indexed(115)).bg(Color::Indexed(233))
+1v Style::new().fg(Color::Indexed(151)).bg(Color::Indexed(234))
+1w Style::new().fg(Color::Indexed(194)).bg(Color::Indexed(234))
+1x Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(234))
+1y Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(234))
+1z Style::new().fg(Color::Indexed(157)).bg(Color::Indexed(234))

@@ -80,22 +80,3 @@ pub fn ball_extent() -> (f32, f32) {
         (lo, hi)
     })
 }
-
-/// Axis-aligned box with per-corner radii, y down.
-/// r: [top-left, top-right, bottom-left, bottom-right]
-#[allow(clippy::too_many_arguments)]
-pub fn rbox(x: f32, y: f32, x0: f32, y0: f32, x1: f32, y1: f32, r: [f32; 4]) -> f32 {
-    let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
-    let (bx, by) = ((x1 - x0) / 2.0, (y1 - y0) / 2.0);
-    let (px, py) = (x - cx, y - cy);
-    let rr = match (px > 0.0, py > 0.0) {
-        (false, false) => r[0],
-        (true, false) => r[1],
-        (false, true) => r[2],
-        (true, true) => r[3],
-    };
-    let qx = px.abs() - bx + rr;
-    let qy = py.abs() - by + rr;
-    let outside = (qx.max(0.0).powi(2) + qy.max(0.0).powi(2)).sqrt();
-    qx.max(qy).min(0.0) + outside - rr
-}

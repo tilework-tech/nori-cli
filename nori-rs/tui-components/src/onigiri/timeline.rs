@@ -18,8 +18,8 @@ pub(crate) const LIGHT_RAMP: f32 = 1200.0;
 pub(crate) const LIGHT_PERIOD: f32 = 6000.0;
 
 /// From here on the ball and wordmark no longer change shape; only the
-/// light moves.
-pub(crate) const SETTLED_AT: f32 = 2000.0;
+/// light and the effects that follow it move.
+pub(crate) const SETTLED_AT: f32 = 3000.0;
 
 /// Frame interval while things fly in and get pressed.
 pub(crate) const INTRO_FRAME: Duration = Duration::from_millis(16);

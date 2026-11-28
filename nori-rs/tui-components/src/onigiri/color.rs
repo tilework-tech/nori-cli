@@ -49,6 +49,13 @@ pub enum Mat {
     Nori,
     /// Brand accent.
     Green,
+    /// Wordmark neon tube. Brightness 0 = unlit glass, 1 = fully lit.
+    Tube,
+    /// Wordmark at rest (0) up through the shimmer's green edge to its white
+    /// core (1).
+    Shine,
+    /// Background glow around lit wordmark strokes. 0 = none.
+    Glow,
 }
 
 type Rgb = (u8, u8, u8);
@@ -69,6 +76,10 @@ const NORI: [Rgb; 4] = [
     (0x2c, 0x6b, 0x41),
 ];
 const GREEN: Rgb = (0x42, 0xbe, 0x65);
+const TUBE: [Rgb; 3] = [(0x2a, 0x33, 0x2e), (0x6f, 0xa8, 0x82), (0xdc, 0xff, 0xe6)];
+const SHINE: [Rgb; 3] = [(0xb4, 0xba, 0xc2), (0x8c, 0xe6, 0xa8), (0xf6, 0xff, 0xf8)];
+/// Glow fades from the dark background the welcome is designed on.
+const GLOW: [Rgb; 2] = [(0x16, 0x18, 0x1c), (0x1e, 0x6e, 0x40)];
 
 fn ramp(stops: &[Rgb], b: f32) -> Rgb {
     let b = b.clamp(0.0, 1.0) * (stops.len() - 1) as f32;
@@ -84,6 +95,9 @@ fn rgb(m: Mat, b: f32) -> Rgb {
         Mat::Rice | Mat::Glint | Mat::Pit => ramp(&RICE, b),
         Mat::Nori => ramp(&NORI, b),
         Mat::Green => GREEN,
+        Mat::Tube => ramp(&TUBE, b),
+        Mat::Shine => ramp(&SHINE, b),
+        Mat::Glow => ramp(&GLOW, b),
     }
 }
 
@@ -125,6 +139,20 @@ fn ansi16(m: Mat, b: f32) -> Color {
         Mat::Pit => Color::DarkGray,
         Mat::Nori => Color::DarkGray,
         Mat::Green => Color::Green,
+        Mat::Tube => {
+            if b > 0.8 {
+                Color::White
+            } else if b > 0.3 {
+                Color::Gray
+            } else {
+                Color::DarkGray
+            }
+        }
+        // The resting wordmark keeps the theme's own foreground.
+        Mat::Shine if b < 0.25 => Color::Reset,
+        Mat::Shine => Color::Green,
+        // Sixteen colours have no shade dark enough to glow with.
+        Mat::Glow => Color::Reset,
     }
 }
 
@@ -138,6 +166,9 @@ pub struct Palette {
     pub tier: Tier,
     rice: [Color; LEVELS],
     nori: [Color; LEVELS],
+    tube: [Color; LEVELS],
+    shine: [Color; LEVELS],
+    glow: [Color; LEVELS],
 }
 
 impl Palette {
@@ -147,6 +178,9 @@ impl Palette {
             tier,
             rice: ramp(Mat::Rice),
             nori: ramp(Mat::Nori),
+            tube: ramp(Mat::Tube),
+            shine: ramp(Mat::Shine),
+            glow: ramp(Mat::Glow),
         }
     }
 
@@ -156,6 +190,9 @@ impl Palette {
             (Tier::Ansi16, m) => ansi16(m, b),
             (Tier::True | Tier::X256, Mat::Rice | Mat::Glint | Mat::Pit) => self.rice[i],
             (Tier::True | Tier::X256, Mat::Nori) => self.nori[i],
+            (Tier::True | Tier::X256, Mat::Tube) => self.tube[i],
+            (Tier::True | Tier::X256, Mat::Shine) => self.shine[i],
+            (Tier::True | Tier::X256, Mat::Glow) => self.glow[i],
             (Tier::True | Tier::X256, Mat::Green) => color(self.tier, m, b),
         }
     }
@@ -176,6 +213,12 @@ pub fn color(tier: Tier, m: Mat, b: f32) -> Color {
             b if b < 0.30 => 233,
             b if b < 0.45 => 234,
             b if b < 0.62 => 236,
+            _ => 22,
+        }),
+        // Nearest-match turns the glow grey too; step it through dark greens.
+        Tier::X256 if m == Mat::Glow => Color::Indexed(match b {
+            b if b < 0.15 => 233,
+            b if b < 0.42 => 234,
             _ => 22,
         }),
         Tier::X256 => Color::Indexed(to256(rgb(m, b))),

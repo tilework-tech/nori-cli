@@ -14,30 +14,30 @@ use super::Onigiri;
 use super::Tier;
 use super::layout;
 
-fn caption() -> Caption {
+pub(super) fn caption() -> Caption {
     Caption {
         version: "v0.42.0".to_string(),
         cwd: "~/tidepool".to_string(),
     }
 }
 
-fn frame(scene: &mut Onigiri, w: u16, h: u16, ms: u64) -> Buffer {
+pub(super) fn frame(scene: &mut Onigiri, w: u16, h: u16, ms: u64) -> Buffer {
     let area = Rect::new(0, 0, w, h);
     let mut buf = Buffer::empty(area);
     scene.render(Duration::from_millis(ms), area, &mut buf);
     buf
 }
 
-fn intro(tier: Tier, w: u16, h: u16, ms: u64) -> Buffer {
+pub(super) fn intro(tier: Tier, w: u16, h: u16, ms: u64) -> Buffer {
     frame(&mut Onigiri::new(tier, caption()), w, h, ms)
 }
 
-fn still(tier: Tier, w: u16, h: u16) -> Buffer {
+pub(super) fn still(tier: Tier, w: u16, h: u16) -> Buffer {
     frame(&mut Onigiri::new(tier, caption()).settled(), w, h, 0)
 }
 
 /// Symbols, then a two-character style id per cell, then the style legend.
-fn dump(buf: &Buffer) -> String {
+pub(super) fn dump(buf: &Buffer) -> String {
     const IDS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let area = buf.area;
     let mut styles: BTreeMap<String, String> = BTreeMap::new();
@@ -100,10 +100,10 @@ fn layout_follows_the_terminal_shape() {
     assert_eq!(
         got,
         vec![
-            (160, 50, Layout::Side { rows: 27.0 }),
-            (100, 30, Layout::Side { rows: 16.0 }),
-            (80, 24, Layout::Side { rows: 12.0 }),
-            (60, 20, Layout::Stack { rows: 13.0 }),
+            (160, 50, Layout::Side { rows: 31.0 }),
+            (100, 30, Layout::Side { rows: 18.0 }),
+            (80, 24, Layout::Side { rows: 14.0 }),
+            (60, 20, Layout::Side { rows: 10.0 }),
             (40, 16, Layout::Stack { rows: 10.0 }),
             (30, 10, Layout::Stack { rows: 5.0 }),
             (24, 6, Layout::Line),
