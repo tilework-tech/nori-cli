@@ -7,7 +7,6 @@ use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 use tui_pty_e2e::has_composer_row;
-use tui_pty_e2e::normalize_for_input_snapshot;
 
 fn has_prompt_ready_marker(contents: &str) -> bool {
     [
