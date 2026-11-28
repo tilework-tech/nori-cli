@@ -34,6 +34,13 @@ pub struct Attached {
     _folder: tempfile::TempDir,
 }
 
+impl Attached {
+    /// The attaching terminal's own folder.
+    pub fn folder(&self) -> &Path {
+        self._folder.path()
+    }
+}
+
 impl Drop for Attached {
     fn drop(&mut self) {
         self.terminal.terminate_and_wait(Duration::from_secs(2));

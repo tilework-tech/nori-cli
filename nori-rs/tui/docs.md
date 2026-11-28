@@ -116,7 +116,8 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   In-process commands the host serves a method for run joined once the host
   advertises it (`command_availability::served_by_host`): `/goal` with
   `goal`, `/context` with `context`, `/compact` with `compact`, `/agent` with
-  `agents`, `/model` and `/config` with `session_config`. Older hosts keep the refusal. Joined `/agent` (`chatwidget/host_agents.rs`)
+  `agents`, `/model` and `/config` with `session_config`, `/mention` with
+  `find_paths` (watchers too). Older hosts keep the refusal. Joined `/agent` (`chatwidget/host_agents.rs`)
   lists `HostConnection.agents`, read from the host's `initialize`
   `nori/preparedAgent` `agentOption` (`host_client/agents.rs`); a row whose
   description is not "Installed" cannot start. It starts a session with the
@@ -143,7 +144,10 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   A refused builtin command stays in the composer as `/command`; a command
   the composer does not know goes to the agent as a prompt. With no session
   on screen, `@` asks a joined host that serves `find_paths` to search its own
-  folder (`app/file_mentions.rs`); otherwise it searches the session on screen.
+  folder and searches nothing on one that does not (`app/file_mentions.rs`
+  `Searcher`); otherwise it searches the session on screen. A joined
+  composer (`joined_host`) inserts a picked image match as its host path
+  instead of attaching a local file of that name.
   Both searchers (`host_client/file_search.rs`, `file_search.rs`) skip a query
   only while the same one is still in flight or scheduled; once it lands, the
   same text asked again is searched again, so a popup reopened on unchanged
