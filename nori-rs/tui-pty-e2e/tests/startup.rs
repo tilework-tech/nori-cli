@@ -283,30 +283,30 @@ fn test_trust_directory_saves_to_config() {
     // Step 2: Press Enter to accept the setup form
     session.send_key(Key::Enter).expect("Failed to send Enter");
 
-    // Step 3: Wait for the trust directory screen
-    // The trust screen shows "You are running Nori in" for the directory path
+    // Step 3: Wait for the trust form to replace the setup form and finish
+    // unrolling; keys pressed while it unrolls only reveal it.
     session
-        .wait_for_text("You are running Nori in", TIMEOUT)
-        .expect("Trust directory screen did not appear");
+        .wait_for(
+            |contents| contents.contains("Work without asking") && contents.contains("Tool output"),
+            TIMEOUT,
+        )
+        .expect("Trust form did not appear");
+    session.settle(Duration::from_millis(300));
 
-    // Step 4: Press 'y' or '1' to select "Trust" option
-    // (The default for non-git repos is DontTrust, so we explicitly select Trust)
-    session
-        .send_key(Key::Char('y'))
-        .expect("Failed to send 'y' key");
-
-    // Step 4b: Choose the preselected Full tool output
-    session
-        .wait_for_text("Use compact tool output", TIMEOUT)
-        .expect("Compact tool output question did not appear after trust selection");
-    session.send_key(Key::Enter).expect("Failed to send Enter");
+    // Step 4: Pick "Work without asking" (a non-git folder prefills "Ask
+    // first"), pick Full tool output, and submit.
+    for key in [Key::Char('y'), Key::Char('f'), Key::Enter] {
+        session
+            .send_key(key)
+            .expect("Failed to answer the trust form");
+    }
 
     // Step 5: Wait for the main prompt to appear (onboarding complete). The
     // idle footer no longer carries an approvals chip by default, so the trust
     // screen giving way to the composer is the signal.
     session
         .wait_for(
-            |contents| has_composer_row(contents) && !contents.contains("You are running Nori in"),
+            |contents| has_composer_row(contents) && !contents.contains("Work without asking"),
             TIMEOUT,
         )
         .expect("Main prompt did not appear after trust selection");

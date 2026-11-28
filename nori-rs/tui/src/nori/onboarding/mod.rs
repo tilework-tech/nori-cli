@@ -6,7 +6,7 @@
 //! - First-launch detection (`~/.nori/cli/config.toml`)
 //! - The first-launch screen: the onigiri welcome above the setup form
 //!   (default agent, permissions, usage stats)
-//! - Nori-branded directory trust prompts
+//! - The folder trust prompt under the same welcome (trust, tool output)
 //! - Nori-branded onboarding screen orchestration
 //!
 //! The onboarding flow is:
@@ -17,7 +17,8 @@ mod first_launch;
 mod onboarding_screen;
 mod setup_form;
 mod setup_step;
-mod trust_directory;
+mod trust_form;
+mod welcome_step;
 
 use crossterm::event::KeyEvent;
 
@@ -51,4 +52,4 @@ pub(crate) use onboarding_screen::NoriOnboardingScreen;
 pub(crate) use onboarding_screen::NoriOnboardingScreenArgs;
 pub(crate) use onboarding_screen::run_nori_onboarding_app;
 pub(crate) use setup_step::NoriSetupStep;
-pub(crate) use trust_directory::NoriTrustDirectoryWidget;
+pub(crate) use trust_form::NoriTrustStep;

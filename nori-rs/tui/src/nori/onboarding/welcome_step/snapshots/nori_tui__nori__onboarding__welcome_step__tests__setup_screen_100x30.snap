@@ -1,5 +1,5 @@
 ---
-source: tui/src/nori/onboarding/setup_step.rs
+source: tui/src/nori/onboarding/welcome_step/tests.rs
 expression: "screen(&s, w, h)"
 ---
                                    ▄▟⠀⠀⠃⠀▄▖

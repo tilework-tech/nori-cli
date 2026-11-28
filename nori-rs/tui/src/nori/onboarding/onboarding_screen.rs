@@ -31,23 +31,25 @@ use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use crate::version::CODEX_CLI_VERSION;
 use nori_tui_components::onigiri::Caption;
+use nori_tui_components::onigiri::Onigiri;
 use nori_tui_components::onigiri::Tier;
 use std::time::Duration;
 
 use super::NoriSetupStep;
-use super::NoriTrustDirectoryWidget;
+use super::NoriTrustStep;
 use super::is_first_launch;
 use super::mark_first_launch_complete;
 use super::setup_form::detect_agents;
 use super::setup_form::save;
+use super::welcome_step::Welcome;
 
 /// Steps in the Nori onboarding flow.
 #[allow(clippy::large_enum_variant)]
 enum NoriStep {
     /// First-launch welcome and setup form.
     Setup(NoriSetupStep),
-    /// Directory trust prompt with Nori branding.
-    TrustDirectory(NoriTrustDirectoryWidget),
+    /// Folder trust prompt under the welcome.
+    TrustDirectory(NoriTrustStep),
 }
 
 /// Arguments for creating a Nori onboarding screen.
@@ -97,32 +99,37 @@ impl NoriOnboardingScreen {
 
         let mut steps: Vec<NoriStep> = Vec::new();
 
+        let caption = Caption {
+            version: format!("v{CODEX_CLI_VERSION}"),
+            cwd: crate::exec_command::relativize_to_home(&cwd)
+                .map(|p| format!("~/{}", p.display()))
+                .unwrap_or_else(|| cwd.display().to_string()),
+        };
+        // One welcome for every step, so it carries on from one form to the
+        // next.
+        let welcome = Welcome::new(Onigiri::new(Tier::detect(), caption));
+
         // First-launch setup unless skipped
         if !skip_welcome && is_first_launch(&nori_home) {
-            let caption = Caption {
-                version: format!("v{CODEX_CLI_VERSION}"),
-                cwd: crate::exec_command::relativize_to_home(&cwd)
-                    .map(|p| format!("~/{}", p.display()))
-                    .unwrap_or_else(|| cwd.display().to_string()),
-            };
-            steps.push(NoriStep::Setup(NoriSetupStep::new(
+            steps.push(NoriStep::Setup(NoriSetupStep::setup(
                 detect_agents(&nori_home, &config),
                 None,
-                caption,
-                Tier::detect(),
-                true,
+                welcome.clone(),
             )));
         }
 
         // Add directory trust screen if needed (unless --skip-trust-directory is set)
         if show_trust_screen && !skip_trust_directory {
             let is_git_repo = resolve_root_git_project_for_trust(&cwd).is_some();
-            steps.push(NoriStep::TrustDirectory(NoriTrustDirectoryWidget::new(
+            let follows = !steps.is_empty();
+            steps.push(NoriStep::TrustDirectory(NoriTrustStep::trust(
                 nori_home.clone(),
                 cwd,
                 is_git_repo,
                 config.tool_output == nori_config::ToolOutput::Full
                     || config.tool_output_from_command_line,
+                welcome,
+                follows,
             )));
         }
 
@@ -177,8 +184,8 @@ impl NoriOnboardingScreen {
     /// Get the user's directory trust decision.
     pub fn directory_trust_decision(&self) -> Option<TrustDirectorySelection> {
         self.steps.iter().find_map(|step| {
-            if let NoriStep::TrustDirectory(widget) = step {
-                widget.selection
+            if let NoriStep::TrustDirectory(trust) = step {
+                trust.selection()
             } else {
                 None
             }
@@ -201,7 +208,8 @@ impl NoriOnboardingScreen {
             .find(|step| step.get_step_state() == StepState::InProgress)
         {
             Some(NoriStep::Setup(setup)) => setup.next_frame_in(area),
-            Some(NoriStep::TrustDirectory(_)) | None => None,
+            Some(NoriStep::TrustDirectory(trust)) => trust.next_frame_in(area),
+            None => None,
         }
     }
 
@@ -432,16 +440,14 @@ mod tests {
     fn nori_step_implements_required_traits() {
         // This test verifies the NoriStep enum implements all required traits.
         // The compilation of this test is the actual verification.
-        let _setup = NoriStep::Setup(NoriSetupStep::new(
-            Vec::new(),
-            None,
+        let welcome = Welcome::new(Onigiri::new(
+            Tier::Ansi16,
             Caption {
                 version: String::new(),
                 cwd: String::new(),
             },
-            Tier::Ansi16,
-            false,
         ));
+        let _setup = NoriStep::Setup(NoriSetupStep::setup(Vec::new(), None, welcome));
     }
 
     #[test]

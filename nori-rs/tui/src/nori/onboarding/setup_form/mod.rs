@@ -32,6 +32,8 @@ use ratatui::widgets::WidgetRef;
 use super::KeyboardHandler;
 use super::StepState;
 use super::StepStateProvider;
+use super::welcome_step::Density;
+use super::welcome_step::WelcomeForm;
 pub(crate) use detect::detect_agents;
 pub(crate) use save::save;
 
@@ -76,17 +78,6 @@ pub(crate) struct SetupChoices {
     pub agent: AgentKind,
     pub permission: Permission,
     pub share_usage: bool,
-}
-
-/// How much room the form takes. Shorter terminals get denser forms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Density {
-    /// Every agent listed, with blank rows between sections.
-    Full,
-    /// [`VISIBLE_AGENTS`] agents at a time, with blank rows between sections.
-    Compact,
-    /// [`VISIBLE_AGENTS`] agents at a time, no blank rows.
-    Tight,
 }
 
 /// Agents listed at once by the compact and tight forms.
@@ -212,16 +203,6 @@ impl StepStateProvider for SetupForm {
 const LABEL_W: usize = 15;
 
 impl SetupForm {
-    /// Rows the form needs at `density`.
-    pub(crate) fn height(&self, density: Density) -> u16 {
-        let (agents, gaps) = match density {
-            Density::Full => (self.agents.len(), 2),
-            Density::Compact => (self.agents.len().min(VISIBLE_AGENTS), 2),
-            Density::Tight => (self.agents.len().min(VISIBLE_AGENTS), 0),
-        };
-        (agents + gaps + 5) as u16
-    }
-
     /// The agents listed at `density`, scrolled so the cursor, or else the
     /// selected agent, is in view.
     fn agent_window(&self, density: Density) -> std::ops::Range<usize> {
@@ -349,8 +330,17 @@ impl SetupForm {
     }
 }
 
-impl SetupForm {
-    pub(crate) fn render_with(&self, density: Density, area: Rect, buf: &mut Buffer) {
+impl WelcomeForm for SetupForm {
+    fn height(&self, density: Density) -> u16 {
+        let (agents, gaps) = match density {
+            Density::Full => (self.agents.len(), 2),
+            Density::Compact => (self.agents.len().min(VISIBLE_AGENTS), 2),
+            Density::Tight => (self.agents.len().min(VISIBLE_AGENTS), 0),
+        };
+        (agents + gaps + 5) as u16
+    }
+
+    fn render_with(&self, density: Density, area: Rect, buf: &mut Buffer) {
         Paragraph::new(self.lines(density)).render(area, buf);
     }
 }
