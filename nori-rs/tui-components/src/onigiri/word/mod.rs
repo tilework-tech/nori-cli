@@ -315,6 +315,14 @@ impl Word {
         self.draw_dot(p, ti, bump, ansi);
     }
 
+    /// Draw only the i dot, as [`Word::draw`] would. Lets a caller put the
+    /// dot in front of something drawn over the rest of the word.
+    pub fn draw_dot_over(&self, p: &mut Paint, t: f32, intro: bool, bump: Option<f32>) {
+        let ti = if intro { t } else { f32::INFINITY };
+        let ansi = p.tier() == Tier::Ansi16;
+        self.draw_dot(p, ti, bump, ansi);
+    }
+
     fn draw_dot(&self, p: &mut Paint, t: f32, bump: Option<f32>, ansi: bool) {
         if t < DOT_AT {
             return;

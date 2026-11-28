@@ -1,0 +1,55 @@
+---
+source: tui/src/nori/onboarding/welcome_step/tests.rs
+assertion_line: 221
+expression: "screen(&s, w, h)"
+---
+                       ▄▄▟⠀⢀⢰⢃⡴▙▄▄
+                     ▄⠀⠀⠀⠀⠀⠈⠋⠈⠀⠰⠰⡄⡷▄
+                   ▗⠀⡷⠀⠀⢃⣿⣌⠀⠀⣴⠀⠳⡄⢀⢀⠰⠀▖
+                  ▟⠀⠀⠀⠀⡇⢻⢸⡌⣏⠀⠋⡄⠰⢀⡼⠀⡄⠰⠸▙
+                ▄⠀⠀⠀⠀⠰⣿⠰⢻⣼⠳⡼⠀⠰⠰⠃⠈⢃⠳⠳⠰⢀⠈⠰▄
+              ▗▟⠀⠀⠀⠀⣴⡴⡼⣄⣏⢸⡇⠰⠀⢀⡄⢀⢃⠋⠀⠀⠀⠋⢀⠳⠋▙▖
+             ▄⠀⠀⠃⠀⡌⠻⠈⣴⡄⣿⡿⠻⡄⠀⡄⠃⠀⠋⠻⢃⠀⣇⠃⠀⢈⠃⠀⡴⡇▄
+            ▟⠀⠀⠀⠀⠈⡴⡴⠳⠈⢀⢋⡇⠃⠰⢳⠀⡇⡄⠀⠃⢈⠀⠸⠀⢀⠻⡄⠃⠰⠀⠀▙
+          ▗⠀⠀⠀⠀⠀⣄⡇⢀⢀⡄⡄⢈⢻⠰⠰⠀⢈⠀⢀⢰⡄⠀⣌⠀⠃⢰⠸⠀⠀⠀⢀⠀⠀⠃⠀▖
+         ▄⠀⠀⠀⠀⠀⠸⡼⡄⠸⣼⠃⡷⡌⠃⠀⡄⠀⠋⠰⠸⢸⠃⠀⢈⠀⠀⠈⠀⠀⢀⡄⠈⠀⡴⢀⡄⠀▄
+        ▟⠀⠀⠀⠀⡏⣼⣴⢳⣴⢳⢸⡷⢳⠰⠀⠀⠋⠃⡄⠀⠳⠈⡄⠃⠋⠀⢀⠀⠀⠃⢀⠀⠃⠀⠀⢸⡄⠃⠀▙
+      ▗▟⠀⠀⠰⠀⡌⠰⡿⡏⢈⣿⢸⢈⠀⠈⠀⠀⠰⠀⠃⠰⠀⠃⠀⡄⢀⠰⠀⠸⠀⠰⠀⠈⣄⠃⡄⣇⠋⢰⠰⠀⡷▙▖
+     ▗⠀⠀⠀⠀⠀⡼⣄⡷⠳⡷⡼⢈⠻⠈⠀⠀⢃⠀⠀⠃⠰⠀⠀⡄⠰⠳⣌⠀⠀⠀⠀⢀⠀⡄⡏⢀⢀⠈⢀⠈⠰⠀⢃⡄⠰▖
+    ▗⢀⠀⠀⠀⠀⡼⡴⠻⠳⡇⡇⣄⠈⢀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⢰⢀⢀⠈⠋⠀⡌⡄⠀⣇⠋⠀⠳⣌▖
+   ▗⠀⠈⠀⠀⠀⣴⢰⡇⡴⣴⢳⢀⠳⠀⠈▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⠋⠸⠋⠀⠃⡄⢀⠀⠰⢈⠀⡄⠀⡼⢃▖
+  ▗⠀⠀⠰⠈⢀⠀⡿⠋⣄⠀⢈⠸⠋⠀⡄⠃▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⢀⡇⠀⠀⠀⢀⢻⡄⠀⠈⠀⠀⠳⣴⠈⢀▖
+  ▐⢃⢀⠀⢀⡌⢰⠃⠀⠀⠀⠈⠀⡷⠃⠀⡄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⢋⣴⢀⢀⢀⣿⠋⠳⢀⠀⠳⠀⢀⠀⡇⠈▌
+   ⠈⠈⣴⠈⠀⠈⠳⠀⣄⢀⠀⣄⠀⠀⢀⢰▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⠸⠈⡌⢻⣌⠈⠀⠀⡿⠀⠀⣄⢈⠰⢃⠃
+    ▜⣌⡄⠀⣷⢀⠀⠈⠸⠀⡏⡄⡄⠈⠋▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⡇⣄⠀⡌⠸⠃⣄⠀⠀⠀⢀⡄⡇⠀▛
+     ▝▀▜⡌⡼⠰⢀⠀⠀⢰⠀⠀⠰⠃▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀⠰⢸⠃⡇⡄⠰⠸⠀⢃⠀⠈▛▀▘
+
+                                            ██
+            ╭────────╮  ╭────────╮  ╭─────  ╷
+            │        │  │        │  │       │
+            │        │  │        │  │       │
+            │        │  │        │  │       │
+            │        │  │        │  │       │
+            ╵        ╵  ╰────────╯  ╵       ╵
+
+                       cli v0.42.0
+
+
+
+
+
+  Default agent   you can switch any time with /agent
+  › ○ Claude Code    not signed in
+    ○ Codex          not signed in
+    ○ Antigravity    not signed in
+    ○ Grok Build     not signed in
+    ○ OpenCode       not signed in
+    ○ Cursor Agent   not signed in
+    ○ Hermes Agent   not signed in
+    ○ Pi             not signed in
+
+    Permissions    ‹ Agent ›   the agent decides what to
+    Usage stats    ‹ Share ›   help the Nori team improve
+                   Counts only. Never your prompts, code,
+
+  Enter start   ↑↓ move   ←→ change   q quit

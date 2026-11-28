@@ -6,7 +6,7 @@
 //! get the settled ball, and the light keeps circling while the ball is big
 //! enough to carry grain texture. Areas too small for a drawn ball get a
 //! hand-pixelled mini onigiri beside a text wordmark (`mini`), and the
-//! smallest get a one-line text wordmark. Beside the ball, the `nori` wordmark is drawn in rounded
+//! smallest get a one-line text wordmark. Beside the ball (or under it in a portrait area), the `nori` wordmark is drawn in rounded
 //! box-drawing lines: a pen writes it, each letter ignites like neon, the i
 //! dot drops in, and a shimmer then follows the light (see `word`).
 //! [`Onigiri::bump`] makes the settled ball and the i dot hop once. Colour
@@ -60,8 +60,10 @@ pub use color::Tier;
 use geometry::Place;
 use layout::INTRO_ROWS;
 pub use layout::Layout;
+use layout::STACK_GAP;
 use layout::TEXTURE_ROWS;
 pub use layout::layout;
+use layout::stack_height;
 use lighting::Light;
 use timeline::BUMP_DUR;
 use timeline::INTRO_FRAME;
@@ -94,8 +96,9 @@ enum Scene {
     Stack {
         rows: f32,
         ball: Ball,
+        word: Box<Word>,
         cx: f32,
-        base: f32,
+        bottom: i32,
     },
     Mini {
         x: i32,
@@ -129,13 +132,17 @@ impl Scene {
             Layout::Stack { rows } => {
                 let cx = f32::from(area.x) + f32::from(area.width) / 2.0;
                 let top = i32::from(area.y)
-                    + ((f32::from(area.height) - rows - 3.0) / 2.0).round() as i32;
+                    + ((f32::from(area.height) - stack_height(rows)) / 2.0).round() as i32;
                 let place = Place::with_rows(cx, top, rows);
+                let ball_bottom = (place.base().round() as i32 - 1).div_euclid(2);
+                let bottom = ball_bottom + STACK_GAP + word::letter_rows(rows);
+                let left = (cx - word::width_for(rows) / 2.0).round() as i32;
                 Scene::Stack {
                     rows,
                     ball: Ball::new(place, rows >= TEXTURE_ROWS, intro && rows >= INTRO_ROWS),
+                    word: Box::new(Word::new(left, bottom, rows)),
                     cx,
-                    base: place.base(),
+                    bottom,
                 }
             }
             Layout::Mini => Scene::Mini {
@@ -260,14 +267,7 @@ impl Onigiri {
                 let light = Light::at(t, animate);
                 let bump = if intro { bump_intro } else { bump_settled };
                 ball.draw(&mut p, t, intro, bump, &light);
-                // Past the intro the wordmark, like the light, only changes
-                // on the light's tick.
-                let tick = if t >= SETTLED_AT {
-                    (t / LIGHT_TICK).floor() * LIGHT_TICK
-                } else {
-                    t
-                };
-                word.draw(&mut p, tick, intro, bump, &light, animate);
+                word.draw(&mut p, light_tick(t), intro, bump, &light, animate);
                 if tw >= word::VERSION_AT {
                     let (left, y) = (*left, *base / 2 + 1);
                     p.put(left, y, "cli", Style::default());
@@ -283,20 +283,28 @@ impl Onigiri {
             Scene::Stack {
                 rows,
                 ball,
+                word,
                 cx,
-                base,
+                bottom,
             } => {
                 let intro = !settled && *rows >= INTRO_ROWS;
                 let tw = if intro { t } else { 1.0e6 };
-                let light = Light::at(t, !settled && *rows >= TEXTURE_ROWS);
+                let animate = !settled && *rows >= TEXTURE_ROWS;
+                let light = Light::at(t, animate);
                 let bump = if intro { bump_intro } else { bump_settled };
+                // The word goes first so the falling i dot passes behind
+                // the ball; a bump's hop is drawn in front of it.
+                word.draw(&mut p, light_tick(t), intro, bump, &light, animate);
                 ball.draw(&mut p, t, intro, bump, &light);
-                if tw >= word::WORD_AT {
-                    let y = (*base / 2.0).round() as i32 + 1;
-                    let x = (*cx - 8.0).round() as i32;
-                    text_wordmark(&mut p, x, y, tw >= word::DOT_AT);
-                    p.put(x + 5, y, "cli", Style::default());
-                    p.put(x + 9, y, &caption.version, dim);
+                if bump.is_some() {
+                    word.draw_dot_over(&mut p, t, intro, bump);
+                }
+                if tw >= word::VERSION_AT {
+                    let y = *bottom + 2;
+                    let line = format!("cli {}", caption.version);
+                    let x = (*cx - line.chars().count() as f32 / 2.0).round() as i32;
+                    p.put(x, y, "cli", Style::default());
+                    p.put(x + 4, y, &caption.version, dim);
                 }
             }
             Scene::Mini { x, y } => {
@@ -329,6 +337,16 @@ pub fn intro_fits(area: Rect) -> bool {
     match layout(area.width, area.height) {
         Layout::Side { rows } | Layout::Stack { rows } => rows >= INTRO_ROWS,
         Layout::Mini | Layout::Line => false,
+    }
+}
+
+/// The wordmark's clock: past the intro it, like the light, only changes on
+/// the light's tick.
+fn light_tick(t: f32) -> f32 {
+    if t >= SETTLED_AT {
+        (t / LIGHT_TICK).floor() * LIGHT_TICK
+    } else {
+        t
     }
 }
 

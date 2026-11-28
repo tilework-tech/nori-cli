@@ -18,12 +18,22 @@ const MINI_COLS: f32 = 30.0;
 pub enum Layout {
     /// Ball left, block wordmark right on the ball's baseline.
     Side { rows: f32 },
-    /// Ball centred, text wordmark line under it.
+    /// Ball centred, block wordmark and caption centred under it.
     Stack { rows: f32 },
     /// The hand-pixelled mini onigiri, 3 rows tall, beside a text wordmark.
     Mini,
     /// One-line text header.
     Line,
+}
+
+/// Rows between the ball and the stacked wordmark: room for the i dot and
+/// a row of air above it.
+pub(crate) const STACK_GAP: i32 = 2;
+
+/// Rows a stacked welcome takes: the ball, a gap, the wordmark, a gap and
+/// the caption.
+pub(crate) fn stack_height(rows: f32) -> f32 {
+    rows + (STACK_GAP + word::letter_rows(rows)) as f32 + 2.0
 }
 
 /// Largest ball that satisfies `ok`, in whole rows, by bisection.
@@ -48,11 +58,17 @@ pub fn layout(w: u16, h: u16) -> Layout {
             && r <= 0.62 * h
             && r + 3.0 <= h - 2.0
     });
-    let stack = fit(&|r| ball_w(r) <= w - 4.0 && r <= 0.66 * h && r + 4.0 <= h - 1.0);
-    // Side by side reads best; stack only when it buys a much bigger ball.
-    if side >= MIN_ROWS && (side >= 14.0 || side * 1.6 >= stack) {
+    let stack = fit(&|r| {
+        ball_w(r).max(word::width_for(r)) <= w - 4.0 && r <= 0.66 * h && stack_height(r) <= h - 1.0
+    });
+    // Cells are about twice as tall as wide, so this is a portrait area.
+    let portrait = 2.0 * h > w;
+    // Side by side reads best in landscape; stack in portrait, or when it
+    // buys a much bigger ball.
+    if side >= MIN_ROWS && !(portrait && stack >= side) && (side >= 14.0 || side * 1.6 > stack) {
         Layout::Side { rows: side }
-    } else if stack >= MIN_ROWS {
+    } else if stack >= TEXTURE_ROWS {
+        // Smaller, the block letters under the ball stop reading as `nori`.
         Layout::Stack { rows: stack }
     } else if h >= mini::HEIGHT as f32 && w >= MINI_COLS {
         Layout::Mini

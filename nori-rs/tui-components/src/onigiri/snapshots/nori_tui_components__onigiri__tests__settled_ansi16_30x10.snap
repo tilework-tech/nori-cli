@@ -1,34 +1,37 @@
 ---
 source: tui-components/src/onigiri/tests.rs
+assertion_line: 136
 expression: "dump(&still(Tier::Ansi16, w, h))"
 ---
                               
-            ▗▟  ▙▖            
-           ▄      ▄           
-          ▟        ▙          
-        ▗    ▀▀▀▀    ▖        
-        ▝    ▀▀▀▀    ▘        
                               
-       nori cli v0.42.0       
+                              
+    ▄▀▀▄                      
+  ▄▀▀▀▀▀▀▄  nori cli v0.42.0  
+  ▀▀▀▀▀▀▀▀                    
+                              
+                              
                               
                               
 
 000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000010203030101000000000000000000000000
-000000000000000000000001030404030303010000000000000000000000
-000000000000000000000104040403030303030100000000000000000000
-000000000000000001030404030505050503030303010000000000000000
-000000000000000001030303030505050503030303010000000000000000
 000000000000000000000000000000000000000000000000000000000000
-000000000000000606060700000000000808080808080800000000000000
+000000000000000000000000000000000000000000000000000000000000
+000000000102030400000000000000000000000000000000000000000000
+000004030505050506040000070707080000000000090909090909090000
+000004060a0a0a0a06040000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000
 00 Style::new().fg(Color::Reset).bg(Color::Reset)
-01 Style::new().gray().bg(Color::Reset)
-02 Style::new().white().bg(Color::Reset)
-03 Style::new().fg(Color::Reset).on_gray()
-04 Style::new().fg(Color::Reset).on_white()
-05 Style::new().dark_gray().on_dark_gray()
-06 Style::new().fg(Color::Reset).bg(Color::Reset).bold()
-07 Style::new().green().bg(Color::Reset).bold()
-08 Style::new().fg(Color::Reset).bg(Color::Reset).dim()
+01 Style::new().white().bg(Color::Reset)
+02 Style::new().white().on_white()
+03 Style::new().white().on_gray()
+04 Style::new().gray().bg(Color::Reset)
+05 Style::new().gray().on_dark_gray()
+06 Style::new().gray().on_gray()
+07 Style::new().fg(Color::Reset).bg(Color::Reset).bold()
+08 Style::new().green().bg(Color::Reset).bold()
+09 Style::new().fg(Color::Reset).bg(Color::Reset).dim()
+0a Style::new().dark_gray().on_dark_gray()

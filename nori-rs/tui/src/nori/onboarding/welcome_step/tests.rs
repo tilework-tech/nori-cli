@@ -209,7 +209,15 @@ fn shorter_terminals_get_denser_forms() {
 #[test]
 fn setup_screen_at_each_terminal_size() {
     let s = all_agents_step();
-    for (w, h) in [(100, 30), (80, 24), (80, 16), (80, 12), (80, 9), (36, 8)] {
+    for (w, h) in [
+        (100, 30),
+        (80, 24),
+        (80, 16),
+        (80, 12),
+        (80, 9),
+        (36, 8),
+        (57, 56),
+    ] {
         insta::assert_snapshot!(format!("setup_screen_{w}x{h}"), screen(&s, w, h));
     }
 }

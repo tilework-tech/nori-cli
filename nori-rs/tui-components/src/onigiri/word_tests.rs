@@ -218,12 +218,12 @@ fn the_i_dot_hops_with_a_bump() {
     use super::timeline::BUMP_HOP;
     use ratatui::layout::Rect;
     use std::time::Duration;
-    let frame = |bump: bool, ms: u64| {
+    let frame = |bump: bool, ms: u64, (w, h): (u16, u16)| {
         let mut scene = super::Onigiri::new(Tier::True, caption());
         if bump {
             scene.bump(Duration::from_millis(6000));
         }
-        let area = Rect::new(0, 0, 100, 30);
+        let area = Rect::new(0, 0, w, h);
         let mut buf = Buffer::empty(area);
         scene.render(Duration::from_millis(ms), area, &mut buf);
         buf
@@ -237,6 +237,44 @@ fn the_i_dot_hops_with_a_bump() {
             .min()
     };
     let mid = 6000 + (BUMP_CROUCH + BUMP_HOP / 2.0) as u64;
-    let (up, rest) = (dot_row(&frame(true, mid)), dot_row(&frame(false, mid)));
-    assert!(up < rest, "dot row {up:?} mid-bump vs {rest:?} at rest");
+    // Beside the ball, and under it in a portrait area, where the hop
+    // must show in front of the ball.
+    for size in [(100, 30), (57, 42)] {
+        let up = dot_row(&frame(true, mid, size));
+        let rest = dot_row(&frame(false, mid, size));
+        assert!(
+            up.is_some() && up < rest,
+            "{size:?}: dot row {up:?} mid-bump vs {rest:?} at rest"
+        );
+    }
+}
+
+#[test]
+fn portrait_area_stacks_the_block_wordmark_under_the_ball() {
+    let (w, h) = (57, 42);
+    let buf = still(Tier::True, w, h);
+    let marks = strokes(&buf);
+    assert!(
+        letter_rows(&buf) >= 3,
+        "block letters, not the text wordmark"
+    );
+    let top = marks.iter().map(|p| p.1).min().unwrap_or(0);
+    let bottom = marks.iter().map(|p| p.1).max().unwrap_or(0);
+    let (left, right) = (
+        marks.iter().map(|p| p.0).min().unwrap_or(0),
+        marks.iter().map(|p| p.0).max().unwrap_or(0),
+    );
+    assert!(top > h / 2, "the word sits under the ball, from row {top}");
+    assert!(
+        (i32::from(left + right) - i32::from(w - 1)).abs() <= 2,
+        "the word is centred: cols {left}..={right}"
+    );
+    let row = |y: u16| (0..w).map(|x| buf[(x, y)].symbol()).collect::<String>();
+    let caption = (bottom + 1..h).find(|y| row(*y).contains("cli v0.42.0"));
+    assert!(caption.is_some(), "the caption sits under the word");
+}
+
+#[test]
+fn portrait_wordmark_truecolor() {
+    assert_snapshot!(dump(&still(Tier::True, 57, 42)));
 }
