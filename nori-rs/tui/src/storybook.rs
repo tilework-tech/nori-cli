@@ -254,3 +254,16 @@ fn instruction_file(path: &str, tokens: i64) -> InstructionFile {
         }),
     }
 }
+
+pub use crate::history_cell::notice::Notice;
+pub use crate::history_cell::notice::NoticeAction;
+pub use crate::history_cell::notice::NoticeKey;
+pub use crate::history_cell::notice::NoticeSlot;
+pub use crate::history_cell::notice::PromptState;
+pub use crate::history_cell::notice::fixtures::NoticeSpecimen;
+
+/// A submitted prompt as the transcript shows it.
+#[must_use]
+pub fn user_prompt_lines(text: &str, width: u16) -> Vec<Line<'static>> {
+    crate::history_cell::new_user_prompt(text.to_string()).display_lines(width)
+}
