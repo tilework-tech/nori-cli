@@ -1,4 +1,4 @@
-//! Where the ball sits on the cell grid, and its squash during the press.
+//! Where the ball sits on the cell grid, and its pose during the press.
 
 use std::f32::consts::TAU;
 
@@ -6,9 +6,13 @@ use super::shape::ASP;
 use super::shape::ball_extent;
 use super::shape::sd_ball;
 use super::shape::smooth;
+use super::timeline::HOP;
+use super::timeline::HOP_AT;
+use super::timeline::HOP_HEIGHT;
+use super::timeline::LAND_AT;
 use super::timeline::PRESS_AT;
-use super::timeline::PRESS_BOUNCE;
 use super::timeline::PRESS_DOWN;
+use super::timeline::WOBBLE;
 
 const BAND_W: f32 = 0.40;
 const BAND_FRAC: f32 = 0.36;
@@ -84,12 +88,12 @@ impl Geo {
             band_top: r1 - band_rows,
         }
     }
-    /// Cell-space point (x in cells, y in half cells) to ball units,
-    /// squashed about the bottom centre.
-    pub fn local(&self, x: f32, y: f32, squash: f32) -> (f32, f32) {
+    /// Cell-space point (x in cells, y in half cells) to ball units, with
+    /// the ball lifted and squashed about its bottom centre.
+    pub fn local(&self, x: f32, y: f32, pose: Pose) -> (f32, f32) {
         let u = (x - self.p.cx) / self.p.s;
-        let v = (y - self.p.top) * ASP / self.p.s + self.vtop;
-        let (sx, sy) = (1.0 + 0.06 * squash, 1.0 - 0.10 * squash);
+        let v = (y + pose.lift - self.p.top) * ASP / self.p.s + self.vtop;
+        let (sx, sy) = (1.0 + 0.06 * pose.squash, 1.0 - 0.10 * pose.squash);
         (u / sx, self.vbot + (v - self.vbot) / sy)
     }
     pub fn in_band_cols(&self, cx: i32) -> bool {
@@ -97,24 +101,51 @@ impl Geo {
     }
 }
 
-/// Squash of the ball at time `t` (positive = pressed flat).
-pub fn press(t: f32) -> f32 {
-    if t < PRESS_AT {
-        0.0
-    } else if t < PRESS_AT + PRESS_DOWN {
-        smooth((t - PRESS_AT) / PRESS_DOWN)
-    } else {
-        let tau = (t - PRESS_AT - PRESS_DOWN) / PRESS_BOUNCE;
-        if tau >= 1.0 {
-            0.0
+/// The ball's squash (positive = flattened, negative = stretched tall) and
+/// lift above its baseline in half cells.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pose {
+    pub squash: f32,
+    pub lift: f32,
+}
+
+impl Pose {
+    pub const REST: Pose = Pose {
+        squash: 0.0,
+        lift: 0.0,
+    };
+
+    /// Pressed flat, springing up stretched, then landing and wobbling.
+    pub fn at(t: f32, p: &Place) -> Pose {
+        if t < PRESS_AT {
+            Pose::REST
+        } else if t < HOP_AT {
+            Pose {
+                squash: smooth((t - PRESS_AT) / PRESS_DOWN),
+                lift: 0.0,
+            }
+        } else if t < LAND_AT {
+            let x = (t - HOP_AT) / HOP;
+            // Stretched while moving fast, round at the top of the hop.
+            let stretch = -0.7 * (2.0 * x - 1.0).powi(2);
+            Pose {
+                squash: 1.0 + (stretch - 1.0) * smooth(x / 0.25),
+                lift: HOP_HEIGHT * Place::rows(p.s) * 2.0 * 4.0 * x * (1.0 - x),
+            }
         } else {
-            (-4.2 * tau).exp() * (tau * TAU * 1.15).cos()
+            let tau = (t - LAND_AT) / WOBBLE;
+            let squash = if tau >= 1.0 {
+                0.0
+            } else {
+                0.9 * (-4.0 * tau).exp() * (tau * TAU * 1.6).cos() * (1.0 - tau)
+            };
+            Pose { squash, lift: 0.0 }
         }
     }
 }
 
 /// Majority-coverage quadrant mask of the ball in a cell (bit order as QUAD).
-pub fn coverage(g: &Geo, cx: i32, cy: i32, squash: f32) -> i32 {
+pub fn coverage(g: &Geo, cx: i32, cy: i32, pose: Pose) -> i32 {
     let mut mask = 0;
     for q in 0..4 {
         let (qx, qy) = ((q % 2) as f32, (q / 2) as f32);
@@ -123,7 +154,7 @@ pub fn coverage(g: &Geo, cx: i32, cy: i32, squash: f32) -> i32 {
             for i in 0..3 {
                 let x = cx as f32 + qx * 0.5 + (i as f32 + 0.5) / 6.0;
                 let y = 2.0 * cy as f32 + qy + (j as f32 + 0.5) / 3.0;
-                let (u, v) = g.local(x, y, squash);
+                let (u, v) = g.local(x, y, pose);
                 if sd_ball(u, v) < 0.0 {
                     n += 1;
                 }

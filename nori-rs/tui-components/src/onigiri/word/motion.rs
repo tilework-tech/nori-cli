@@ -7,12 +7,13 @@ use super::super::shape::smooth;
 
 /// The pen starts writing.
 pub const WORD_AT: f32 = 1250.0;
-/// Writing all four letters takes this long at any size; bigger letters
-/// just move the pen faster.
-const DRAW_DUR: f32 = 1000.0;
-pub const DRAW_END: f32 = WORD_AT + DRAW_DUR;
-/// Pen steps (half cells) spent lifting the pen between letters.
-pub const LIFT_STEPS: i32 = 3;
+/// Each letter has its own pen; they start this far apart, left to right.
+pub const STAGGER: f32 = 60.0;
+/// The longest letter takes this long to write at any size; the others use
+/// the same pen speed, so shorter letters finish sooner.
+pub const LETTER_DUR: f32 = 650.0;
+/// Every pen has finished by here.
+pub const DRAW_END: f32 = WORD_AT + 3.0 * STAGGER + LETTER_DUR;
 /// A freshly drawn stroke fades from the pen's white to unlit glass.
 pub const TRAIL: f32 = 260.0;
 
@@ -25,7 +26,7 @@ pub const IGNITE_DUR: f32 = IGNITE.len() as f32 * IGNITE_SLOT;
 /// After igniting, the neon cools to the resting wordmark over this long.
 pub const COOL: f32 = 900.0;
 /// Glow left behind once the neon has cooled (0 = none).
-pub const GLOW_REST: f32 = 0.0;
+pub const GLOW_REST: f32 = 0.35;
 /// Glow strength: background brightness reached inside a lit letter, and
 /// how quickly overlapping glow saturates.
 pub const GLOW_MAX: f32 = 0.6;

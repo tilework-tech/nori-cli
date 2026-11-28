@@ -3,7 +3,7 @@
 //! Everything about a cell that does not depend on time (coverage, surface
 //! normals, which Braille dots are grains and how they tilt) is computed when
 //! the ball is placed. A frame then costs a few dot products per cell. Only
-//! the 490 ms while the ball is squashed by the press are computed live.
+//! the second while the ball is pressed, hops and wobbles is computed live.
 
 use std::f32::consts::TAU;
 
@@ -18,8 +18,8 @@ use super::color::Palette;
 use super::color::Tier;
 use super::geometry::Geo;
 use super::geometry::Place;
+use super::geometry::Pose;
 use super::geometry::coverage;
-use super::geometry::press;
 use super::grains::Grains;
 use super::lighting::Light;
 use super::lighting::V3;
@@ -37,8 +37,7 @@ use super::shape::smooth;
 use super::timeline::NORI_AT;
 use super::timeline::NORI_DUR;
 use super::timeline::PRESS_AT;
-use super::timeline::PRESS_BOUNCE;
-use super::timeline::PRESS_DOWN;
+use super::timeline::PRESS_DONE;
 use super::timeline::PRESS_FRONT;
 
 const GRAIN_DENSITY: f32 = 0.50;
@@ -49,9 +48,12 @@ const GLINT_AT: f32 = 0.06;
 const PIT_AT: f32 = 0.08;
 /// Brightness margin over which a grain fades from invisible to full. Full
 /// strength lands where grains used to switch on outright, so the texture
-/// reads as strongly as before. ANSI 16 cannot fade, so there grains only
-/// show at full strength.
+/// reads as strongly as before. ANSI 16 cannot fade; there every grain past
+/// the threshold shows.
 const GRAIN_FADE: f32 = 0.14;
+/// In ANSI 16 a grain shows once it differs from the rice around it by
+/// this much, so the texture is dense enough to read as rice.
+const ANSI_GRAIN: f32 = 0.015;
 
 /// Where the cell grid starts and the paint target for one frame.
 pub struct Paint<'a> {
@@ -128,13 +130,13 @@ enum Rice {
 }
 
 impl Rice {
-    fn at(g: &Geo, cx: i32, cy: i32, squash: f32, texture: bool) -> Option<Rice> {
-        let mask = coverage(g, cx, cy, squash);
+    fn at(g: &Geo, cx: i32, cy: i32, pose: Pose, texture: bool) -> Option<Rice> {
+        let mask = coverage(g, cx, cy, pose);
         if mask == 0 {
             return None;
         }
         let at = |dy: f32| {
-            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, squash);
+            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, pose);
             normal(u, v)
         };
         let n = at(1.0);
@@ -193,20 +195,29 @@ impl Rice {
             } => {
                 let b = shade(n, light);
                 let bg = p.c(Mat::Rice, b);
-                let fades = p.tier() != Tier::Ansi16;
-                let (glint_at, pit_at) = if fades {
-                    (GLINT_AT, PIT_AT)
-                } else {
-                    (GLINT_AT + GRAIN_FADE, f32::INFINITY)
-                };
+                if p.tier() == Tier::Ansi16 {
+                    // Two greys only: grains show as white dots on grey rice
+                    // and as grey dots in the white highlight.
+                    let lit = bg == Color::White;
+                    let mut bits = 0;
+                    for grain in &grains[..count as usize] {
+                        let d = shade(grain.n, light) - b;
+                        if (lit && d < -ANSI_GRAIN) || (!lit && d > ANSI_GRAIN) {
+                            bits |= grain.bit;
+                        }
+                    }
+                    let fg = if lit { Color::Gray } else { Color::White };
+                    p.glyph(cx, cy, braille(bits), Style::default().fg(fg).bg(bg));
+                    return;
+                }
                 let (mut glint, mut pit) = (0, 0);
                 let (mut glint_k, mut pit_k) = (0.0f32, 0.0f32);
                 for grain in &grains[..count as usize] {
                     let d = shade(grain.n, light) - b;
-                    if d > glint_at {
+                    if d > GLINT_AT {
                         glint |= grain.bit;
                         glint_k = glint_k.max(smooth((d - GLINT_AT) / GRAIN_FADE));
-                    } else if -d > pit_at {
+                    } else if -d > PIT_AT {
                         pit |= grain.bit;
                         pit_k = pit_k.max(smooth((-d - PIT_AT) / GRAIN_FADE));
                     }
@@ -241,9 +252,9 @@ enum Nori {
 
 impl Nori {
     fn at(g: &Geo, cx: i32, cy: i32) -> Option<Nori> {
-        let mask = coverage(g, cx, cy, 0.0);
+        let mask = coverage(g, cx, cy, Pose::REST);
         let at = |dy: f32| {
-            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, 0.0);
+            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, Pose::REST);
             normal(u, v)
         };
         match mask {
@@ -298,9 +309,6 @@ fn front(t: f32) -> f32 {
     }
 }
 
-/// When the press front and the squash stop changing.
-const PRESS_DONE: f32 = PRESS_AT + PRESS_DOWN + PRESS_BOUNCE;
-
 impl Ball {
     /// `flies` bakes the intro's flying grains, which only balls that play
     /// the intro need.
@@ -308,10 +316,12 @@ impl Ball {
         let g = Geo::new(place);
         let settled = front(PRESS_DONE);
         let mut cells = Vec::new();
-        for cy in g.rows.0..g.rows.1 {
+        // Room above the ball for the hop and the stretch.
+        let above = (0.12 * Place::rows(place.s)).ceil() as i32 + 1;
+        for cy in g.rows.0 - above..g.rows.1 {
             for cx in g.cols.0..g.cols.1 {
                 let rice = if pressed(&g, cx, cy, settled) {
-                    Rice::at(&g, cx, cy, 0.0, texture)
+                    Rice::at(&g, cx, cy, Pose::REST, texture)
                 } else {
                     None
                 };
@@ -374,7 +384,7 @@ impl Ball {
             return;
         }
         let live = t_shape < PRESS_DONE;
-        let squash = press(t_shape);
+        let pose = Pose::at(t_shape, &g.p);
         for cell in &self.cells {
             let (cx, cy) = (cell.x, cell.y);
             if banded && g.in_band_cols(cx) && cy >= band_top {
@@ -383,7 +393,7 @@ impl Ball {
                 }
             } else if live {
                 if pressed(&g, cx, cy, front)
-                    && let Some(rice) = Rice::at(&g, cx, cy, squash, self.texture)
+                    && let Some(rice) = Rice::at(&g, cx, cy, pose, self.texture)
                 {
                     rice.draw(p, cx, cy, light);
                 }
@@ -396,6 +406,6 @@ impl Ball {
 
 /// Whether the press front has reached the centre of cell (`cx`, `cy`).
 fn pressed(g: &Geo, cx: i32, cy: i32, front: f32) -> bool {
-    let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + 1.0, 0.0);
+    let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + 1.0, Pose::REST);
     front > 0.0 && sd_ball(u / front.max(0.01), v / front.max(0.01)) < 0.0
 }

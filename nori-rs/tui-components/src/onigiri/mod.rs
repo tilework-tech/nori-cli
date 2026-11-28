@@ -1,8 +1,8 @@
 //! Onigiri: the animated first-launch welcome.
 //!
 //! The ball sizes itself to the area. With room for it (a ball at least 11
-//! rows tall) the full welcome plays: grains gather, get
-//! pressed, the nori band wraps, then a light circles the rice. Smaller areas
+//! rows tall) the full welcome plays: grains spring together, get
+//! pressed, the ball hops and lands with a wobble, the nori band wraps, then a light circles the rice. Smaller areas
 //! get the settled ball, and the light keeps circling while the ball is big
 //! enough to carry grain texture. Areas too small for a ball get a one-line
 //! text wordmark. Beside the ball, the `nori` wordmark is drawn in rounded
@@ -79,7 +79,7 @@ enum Scene {
     Side {
         rows: f32,
         ball: Ball,
-        word: Word,
+        word: Box<Word>,
         left: i32,
         base: i32,
     },
@@ -105,7 +105,7 @@ impl Scene {
                 let place = Place::with_rows(ox + ball_w / 2.0, top, rows);
                 let base = place.base().round() as i32;
                 let left = (ox + ball_w + 0.2 * rows + 3.0).round() as i32;
-                let word = Word::new(left, (base - 1).div_euclid(2), rows);
+                let word = Box::new(Word::new(left, (base - 1).div_euclid(2), rows));
                 Scene::Side {
                     rows,
                     ball: Ball::new(place, rows >= TEXTURE_ROWS, intro && rows >= INTRO_ROWS),

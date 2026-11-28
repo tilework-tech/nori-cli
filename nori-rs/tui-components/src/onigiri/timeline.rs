@@ -4,12 +4,23 @@ use std::time::Duration;
 
 pub(crate) const GRAIN_SPREAD: f32 = 380.0;
 pub(crate) const GRAIN_DUR: f32 = 420.0;
+/// Grains overshoot their spot by this much of their path, then spring back.
+pub(crate) const GRAIN_OVERSHOOT: f32 = 1.9;
 pub(crate) const PRESS_AT: f32 = 860.0;
 pub(crate) const PRESS_DOWN: f32 = 110.0;
-/// The bounce after the press dies out over this long.
-pub(crate) const PRESS_BOUNCE: f32 = 380.0;
 pub(crate) const PRESS_FRONT: f32 = 120.0;
-pub(crate) const NORI_AT: f32 = 1080.0;
+/// After the press the ball springs up stretched, falls back and lands.
+pub(crate) const HOP_AT: f32 = PRESS_AT + PRESS_DOWN;
+pub(crate) const HOP: f32 = 260.0;
+/// Hop height as a fraction of the ball's height.
+pub(crate) const HOP_HEIGHT: f32 = 0.08;
+pub(crate) const LAND_AT: f32 = HOP_AT + HOP;
+/// The landing squash wobbles out over this long.
+pub(crate) const WOBBLE: f32 = 520.0;
+/// From here the ball no longer changes shape.
+pub(crate) const PRESS_DONE: f32 = LAND_AT + WOBBLE;
+/// The band wraps once the ball has stopped wobbling.
+pub(crate) const NORI_AT: f32 = PRESS_DONE;
 pub(crate) const NORI_DUR: f32 = 380.0;
 /// The light starts circling here, easing up to speed over LIGHT_RAMP.
 pub(crate) const LIGHT_AT: f32 = 1900.0;

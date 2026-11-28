@@ -61,6 +61,36 @@ fn pen_writes_the_letters_left_to_right() {
 }
 
 #[test]
+fn all_four_pens_are_writing_almost_at_once() {
+    let right = |buf: &Buffer| strokes(buf).iter().map(|p| p.0).max();
+    let early = word::WORD_AT as u64 + 3 * word::PEN_STAGGER as u64 + 40;
+    assert_eq!(
+        right(&intro(Tier::True, 100, 30, early)),
+        right(&still(Tier::True, 100, 30))
+    );
+}
+
+#[test]
+fn resting_wordmark_keeps_a_faint_glow() {
+    let buf = intro(Tier::True, 100, 30, 4000);
+    let s = strokes(&buf);
+    let (x0, x1) = (
+        s.iter().map(|p| p.0).min().unwrap_or(0),
+        s.iter().map(|p| p.0).max().unwrap_or(0),
+    );
+    let glowing = buf
+        .area
+        .positions()
+        .filter(|p| (x0..=x1).contains(&p.x) && matches!(buf[*p].bg, Color::Rgb(..)))
+        .count();
+    assert!(
+        glowing > s.len(),
+        "only {glowing} glowing cells for {} strokes",
+        s.len()
+    );
+}
+
+#[test]
 fn dot_settles_just_above_the_i() {
     let buf = still(Tier::True, 100, 30);
     let s = strokes(&buf);
@@ -134,8 +164,8 @@ fn shimmer_repeats_with_every_turn_of_the_light() {
 
 #[test]
 fn wordmark_intro_truecolor() {
-    // Pen mid-stroke, letters igniting, dot falling, dot squashed, cooled.
-    for ms in [1500, 2050, 2550, 2700, 3300] {
+    // Pens mid-stroke, letters igniting, dot falling, dot squashed, cooled.
+    for ms in [1500, 1900, 2350, 2520, 3300] {
         assert_snapshot!(
             format!("word_intro_true_100x30_{ms}ms"),
             dump(&intro(Tier::True, 100, 30, ms))

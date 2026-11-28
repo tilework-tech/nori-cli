@@ -1,6 +1,7 @@
 //! The `nori` wordmark in rounded box-drawing lines.
 //!
-//! The intro writes each letter with a pen that leaves unlit glass behind;
+//! The intro writes all four letters at once, each with its own pen that
+//! leaves unlit glass behind;
 //! each finished letter then ignites like a neon tube, glows and cools to
 //! the resting wordmark. The i dot falls in last, squashes, bounces and
 //! sends a ripple down the stem. After that a shimmer runs across the
@@ -27,18 +28,22 @@ use motion::BOUNCE;
 pub use motion::DOT_AT;
 use motion::DOT_GLOW;
 use motion::DOT_LAND;
+#[cfg(test)]
 pub use motion::DRAW_END;
 use motion::GLOW_MAX;
 use motion::GLOW_R;
 use motion::GLOW_REST;
 use motion::IGNITE_DELAY;
 use motion::IGNITE_DUR;
-use motion::LIFT_STEPS;
+use motion::LETTER_DUR;
 use motion::RIPPLE_ROW;
 use motion::SHIMMER_GLOW;
 use motion::SLANT;
 use motion::SPLASH;
 use motion::SQUASH;
+#[cfg(test)]
+pub use motion::STAGGER as PEN_STAGGER;
+use motion::STAGGER;
 use motion::TAIL_W;
 use motion::TRAIL;
 pub use motion::VERSION_AT;
@@ -68,10 +73,10 @@ struct Stroke {
     y: i32,
     glyph: &'static str,
     letter: usize,
-    /// Pen step that shows the half stub, if the pen enters from a side.
-    stub: Option<(i32, &'static str)>,
-    /// Pen step that completes the cell.
-    full: i32,
+    /// When the half stub shows, if the pen enters from a side.
+    stub: Option<(f32, &'static str)>,
+    /// When the pen completes the cell.
+    full_at: f32,
 }
 
 /// A cell near the strokes and how much glow each letter casts on it.
@@ -88,8 +93,10 @@ pub struct Word {
     width: i32,
     strokes: Vec<Stroke>,
     glow: Vec<GlowCell>,
-    /// The cell the pen is on at each step, `None` while it is lifted.
-    pen: Vec<Option<(i32, i32)>>,
+    /// Each letter's pen: the cell it is on at each step, and when it
+    /// starts.
+    pen: [Vec<(i32, i32)>; 4],
+    pen_at: [f32; 4],
     step_ms: f32,
     ignite_at: [f32; 4],
     stem_x: i32,
@@ -106,35 +113,40 @@ impl Word {
     pub fn new(left: i32, bottom: i32, rows: f32) -> Word {
         let h = letter_rows(rows);
         let top = bottom - h + 1;
+        let letters = letters::nori(h);
+        let steps = |path: &[(i32, i32)]| 2 * path.len() - 1;
+        let longest = letters
+            .iter()
+            .map(|(_, l)| steps(&l.path))
+            .max()
+            .unwrap_or(1);
+        let step_ms = LETTER_DUR / longest as f32;
+        let pen_at = [0, 1, 2, 3].map(|k| WORD_AT + k as f32 * STAGGER);
         let mut strokes = Vec::new();
-        let mut pen = Vec::new();
-        let mut done = [0; 4];
+        let mut pen: [Vec<(i32, i32)>; 4] = Default::default();
         let mut stem_x = left;
-        for (k, (x0, letter)) in letters::nori(h).into_iter().enumerate() {
-            if k > 0 {
-                pen.extend((0..LIFT_STEPS).map(|_| None));
-            }
+        for (k, (x0, letter)) in letters.iter().enumerate() {
+            let at = |step: usize| pen_at[k] + step as f32 * step_ms;
             for (i, (x, y)) in letter.path.iter().enumerate() {
                 let (x, y) = (left + x0 + x, top + y);
                 let stub = letter.stub(i).map(|s| {
-                    pen.push(Some((x, y)));
-                    (pen.len() as i32 - 1, s)
+                    pen[k].push((x, y));
+                    (at(pen[k].len() - 1), s)
                 });
-                pen.push(Some((x, y)));
+                pen[k].push((x, y));
                 strokes.push(Stroke {
                     x,
                     y,
                     glyph: letter.glyph(i),
                     letter: k,
                     stub,
-                    full: pen.len() as i32 - 1,
+                    full_at: at(pen[k].len() - 1),
                 });
             }
-            done[k] = pen.len();
             stem_x = left + x0;
         }
-        let step_ms = (DRAW_END - WORD_AT) / pen.len() as f32;
-        let ignite_at = done.map(|d| WORD_AT + d as f32 * step_ms + IGNITE_DELAY);
+        let ignite_at =
+            [0, 1, 2, 3].map(|k| pen_at[k] + pen[k].len() as f32 * step_ms + IGNITE_DELAY);
         let dot_w = ((h as f32 / 4.0).round() as i32).max(1);
         let width = letters::width(h);
         let mut word = Word {
@@ -145,6 +157,7 @@ impl Word {
             strokes,
             glow: Vec::new(),
             pen,
+            pen_at,
             step_ms,
             ignite_at,
             stem_x,
@@ -208,12 +221,6 @@ impl Word {
             amp * motion::shimmer(dx, moving_right, hf)
         };
 
-        let pen_step = ((ti - WORD_AT) / self.step_ms).floor();
-        let step = if pen_step.is_finite() {
-            pen_step as i64
-        } else {
-            i64::MAX
-        };
         let glow_of = |k: usize| {
             let dt = ti - self.ignite_at[k];
             match ignite(dt) {
@@ -238,14 +245,22 @@ impl Word {
             }
         }
 
-        let head = usize::try_from(step)
-            .ok()
-            .and_then(|s| self.pen.get(s).copied().flatten());
-        if let Some((hx, hy)) = head {
-            for j in 0..3 {
-                let r = hash(step as i32 * 3 + j, 17);
-                let dx = (hash(step as i32, j * 7 + 1) * 5.0) as i32 - 2;
-                let dy = (hash(j + 3, step as i32 * 5) * 3.0) as i32 - 1;
+        // Where each pen is now, with a seed for its sparks.
+        let heads: Vec<(i32, i32, i32)> = (0..4)
+            .filter_map(|k| {
+                let step = ((ti - self.pen_at[k]) / self.step_ms).floor();
+                let i = usize::try_from(step as i64)
+                    .ok()
+                    .filter(|_| step.is_finite())?;
+                let (x, y) = *self.pen[k].get(i)?;
+                Some((x, y, k as i32 * 1000 + i as i32))
+            })
+            .collect();
+        for &(hx, hy, seed) in &heads {
+            for j in 0..2 {
+                let r = hash(seed * 3 + j, 17);
+                let dx = (hash(seed, j * 7 + 1) * 5.0) as i32 - 2;
+                let dy = (hash(j + 3, seed * 5) * 3.0) as i32 - 1;
                 if (dx, dy) != (0, 0) {
                     let (m, b) = if r < 0.5 {
                         (Mat::Green, 1.0)
@@ -259,9 +274,9 @@ impl Word {
         }
 
         for s in &self.strokes {
-            if i64::from(s.full) > step {
+            if ti < s.full_at {
                 if let Some((at, stub)) = s.stub
-                    && i64::from(at) <= step
+                    && ti >= at
                 {
                     p.glyph(s.x, s.y, stub, style(Mat::Tube, 1.0, p));
                 }
@@ -269,23 +284,20 @@ impl Word {
             }
             let dt = ti - self.ignite_at[s.letter];
             let (m, b) = match ignite(dt) {
-                None => {
-                    let age = ti - (WORD_AT + s.full as f32 * self.step_ms);
-                    (Mat::Tube, 1.0 - 0.9 * clamp01(age / TRAIL))
-                }
+                None => (Mat::Tube, 1.0 - 0.9 * clamp01((ti - s.full_at) / TRAIL)),
                 Some(lv) if dt < IGNITE_DUR => (Mat::Tube, 0.1 + 0.9 * lv),
                 Some(_) => (Mat::Shine, (1.0 - cooled(dt)).max(shine(s.x, s.y))),
             };
             let mut st = style(m, b, p);
-            if head == Some((s.x, s.y)) {
+            if heads.iter().any(|h| (h.0, h.1) == (s.x, s.y)) {
                 st = style(Mat::Tube, 1.0, p).add_modifier(Modifier::BOLD);
             }
             p.glyph(s.x, s.y, s.glyph, st);
         }
-        if let Some((hx, hy)) = head
-            && !ansi
-        {
-            p.tint(hx, hy, p.pal.color(Mat::Glow, 0.9));
+        if !ansi {
+            for &(hx, hy, _) in &heads {
+                p.tint(hx, hy, p.pal.color(Mat::Glow, 0.9));
+            }
         }
 
         self.draw_dot(p, ti, ansi);

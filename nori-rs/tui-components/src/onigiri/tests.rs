@@ -325,3 +325,19 @@ fn grains_fade_in_and_out_instead_of_popping() {
         worst.1
     );
 }
+
+fn top_row(buf: &Buffer) -> Option<u16> {
+    buf.area
+        .positions()
+        .find(|p| buf[*p].symbol() != " ")
+        .map(|p| p.y)
+}
+
+#[test]
+fn ball_hops_after_the_press_and_lands() {
+    use super::timeline::HOP;
+    use super::timeline::HOP_AT;
+    let at = |ms: f32| top_row(&intro(Tier::True, 100, 30, ms as u64));
+    let (up, rest) = (at(HOP_AT + HOP / 2.0), at(3500.0));
+    assert!(up < rest, "top row {up:?} mid-hop vs {rest:?} at rest");
+}

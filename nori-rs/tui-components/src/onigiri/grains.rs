@@ -5,11 +5,13 @@ use std::f32::consts::TAU;
 
 use super::geometry::Geo;
 use super::geometry::Place;
+use super::geometry::Pose;
 use super::shape::BRAILLE_BITS;
-use super::shape::ease_out;
+use super::shape::clamp01;
 use super::shape::hash;
 use super::shape::sd_ball;
 use super::timeline::GRAIN_DUR;
+use super::timeline::GRAIN_OVERSHOOT;
 use super::timeline::GRAIN_SPREAD;
 
 /// One flying dot: where it starts and lands (cells, half cells) and when.
@@ -52,7 +54,7 @@ impl Grains {
         for by in (g.rows.0 * 4)..(g.rows.1 * 4) {
             for bx in (g.cols.0 * 2)..(g.cols.1 * 2) {
                 let (x, y) = ((bx as f32 + 0.5) / 2.0, (by as f32 + 0.5) / 2.0);
-                let (u, v) = g.local(x, y, 0.0);
+                let (u, v) = g.local(x, y, Pose::REST);
                 if sd_ball(u, v) >= 0.0 || hash(bx, by) > 0.6 {
                     continue;
                 }
@@ -72,8 +74,9 @@ impl Grains {
                 });
             }
         }
-        // Dots move in straight lines, so the box around both ends of every
-        // path holds every frame.
+        // Dots move in straight lines and overshoot their end by under 15%,
+        // so the box around the start and the farthest overshoot holds
+        // every frame.
         let cell = |x: f32, y: f32| {
             (
                 ((x * 2.0).floor() as i32).div_euclid(2),
@@ -82,7 +85,11 @@ impl Grains {
         };
         let (mut x0, mut y0, mut x1, mut y1) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
         for d in &dots {
-            for (x, y) in [d.from, d.to] {
+            let past = (
+                d.to.0 + (d.to.0 - d.from.0) * 0.15,
+                d.to.1 + (d.to.1 - d.from.1) * 0.15,
+            );
+            for (x, y) in [d.from, d.to, past] {
                 let (cx, cy) = cell(x, y);
                 (x0, y0, x1, y1) = (
                     x0.min(cx - 1),
@@ -110,7 +117,8 @@ impl Grains {
         let (x0, y0, w) = self.origin;
         self.slots.fill(Slot::default());
         for d in &self.dots {
-            let k = ease_out((t - d.start) / d.dur);
+            let x = clamp01((t - d.start) / d.dur);
+            let k = spring(x);
             let (px, py) = (
                 d.from.0 + (d.to.0 - d.from.0) * k,
                 d.from.1 + (d.to.1 - d.from.1) * k,
@@ -120,7 +128,7 @@ impl Grains {
             let slot = &mut self.slots[((cy - y0) * w + cx - x0) as usize];
             slot.used = true;
             slot.bits |= BRAILLE_BITS[dby.rem_euclid(4) as usize][dbx.rem_euclid(2) as usize];
-            slot.landed += if k > 0.97 { 1 } else { -1 };
+            slot.landed += if x > 0.97 { 1 } else { -1 };
         }
         self.slots
             .iter()
@@ -131,4 +139,11 @@ impl Grains {
                 (x0 + i % w, y0 + i / w, s.bits, s.landed > 0)
             })
     }
+}
+
+/// Ease out past the end and back (an overshoot of about 12% at the default
+/// GRAIN_OVERSHOOT).
+fn spring(x: f32) -> f32 {
+    let (c1, c3) = (GRAIN_OVERSHOOT, GRAIN_OVERSHOOT + 1.0);
+    1.0 + c3 * (x - 1.0).powi(3) + c1 * (x - 1.0).powi(2)
 }

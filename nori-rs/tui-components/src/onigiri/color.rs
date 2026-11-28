@@ -126,28 +126,16 @@ fn to256((r, g, b): Rgb) -> u8 {
 
 fn ansi16(m: Mat, b: f32) -> Color {
     match m {
-        Mat::Rice => {
-            if b > 0.86 {
-                Color::White
-            } else if b > 0.24 {
-                Color::Gray
-            } else {
-                Color::DarkGray
-            }
-        }
+        // Dark grey reads as mud on most themes, so rice is grey with white
+        // highlights and the grain texture carries the shading.
+        Mat::Rice if b > 0.86 => Color::White,
+        Mat::Rice => Color::Gray,
         Mat::Glint => Color::White,
         Mat::Pit => Color::DarkGray,
         Mat::Nori => Color::DarkGray,
         Mat::Green => Color::Green,
-        Mat::Tube => {
-            if b > 0.8 {
-                Color::White
-            } else if b > 0.3 {
-                Color::Gray
-            } else {
-                Color::DarkGray
-            }
-        }
+        Mat::Tube if b > 0.8 => Color::White,
+        Mat::Tube => Color::Gray,
         // The resting wordmark keeps the theme's own foreground.
         Mat::Shine if b < 0.25 => Color::Reset,
         Mat::Shine => Color::Green,
@@ -223,5 +211,25 @@ pub fn color(tier: Tier, m: Mat, b: f32) -> Color {
         }),
         Tier::X256 => Color::Indexed(to256(rgb(m, b))),
         Tier::Ansi16 => ansi16(m, b),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use ratatui::style::Color;
+
+    use super::Mat;
+    use super::Tier;
+    use super::color;
+
+    #[test]
+    fn ansi16_rice_and_wordmark_avoid_dark_grey() {
+        let dark: Vec<(Mat, i32)> = [Mat::Rice, Mat::Glint, Mat::Tube, Mat::Shine]
+            .into_iter()
+            .flat_map(|m| (0..=20).map(move |i| (m, i)))
+            .filter(|(m, i)| color(Tier::Ansi16, *m, *i as f32 / 20.0) == Color::DarkGray)
+            .collect();
+        assert_eq!(dark, Vec::new());
     }
 }
