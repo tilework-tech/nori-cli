@@ -1,0 +1,21 @@
+---
+source: tui-components/src/onigiri/tests.rs
+expression: "dump(&still(Tier::Ansi16, w, h))"
+---
+                        
+                        
+                        
+ nori cli v0.42.0       
+                        
+                        
+
+000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000
+000101010200010101000303030303030300000000000000
+000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000
+00 Style::new().fg(Color::Reset).bg(Color::Reset)
+01 Style::new().fg(Color::Reset).bg(Color::Reset).bold()
+02 Style::new().green().bg(Color::Reset).bold()
+03 Style::new().fg(Color::Reset).bg(Color::Reset).dim()

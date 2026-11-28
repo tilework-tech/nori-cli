@@ -119,7 +119,10 @@ runtime), `acp-host`, `tui`, `nori-config`, and `nori-protocol`. Other crates:
 - `auth-providers`: sign-in detection and saved API keys per provider.
 - `installed`: install tracking.
 - `skillsets`: client for the `nori-skillsets` CLI.
-- `tui-components`: reusable Ratatui components.
+- `tui-components`: reusable Ratatui components, including `onigiri`, the animated
+  first-launch welcome (not yet used by `tui`). Its implementation, tests,
+  snapshots, and demo runner (`--example onigiri`) all live in `src/onigiri/`;
+  see the module comment in `src/onigiri/mod.rs`.
 - `mock-acp-agent`: scriptable ACP agent for tests.
 - `tui-pty-e2e`: PTY end-to-end tests of the real binaries.
 - Inherited from Codex: `core`, `common`, `login`, `rmcp-client` and `mcp-types` (MCP client), `sandbox`, `linux-sandbox`, `windows-sandbox-rs`, `execpolicy`, `apply-patch`, `arg0` (argv0 dispatch), `process-hardening`, `keyring-store`, `file-search`, `ansi-escape`, `async-utils`, `utils/*`, `stdio-to-uds`.
