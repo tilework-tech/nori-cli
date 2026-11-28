@@ -1,374 +1,394 @@
-//! The onigiri: geometry, the intro (gather, press, wrap) and the lit rice.
+//! The onigiri ball: geometry baked once per size, shaded every frame.
 //!
-//! Rice is shaded as a puffy dome under one light that circles the ball
-//! after the intro. Each Braille dot may belong to a rice grain with its own
-//! tilt; grains that tilt toward the light glint and grains in shadow show as
-//! pits, so the texture moves with the light while the shape stays still.
+//! Everything about a cell that does not depend on time (coverage, surface
+//! normals, which Braille dots are grains and how they tilt) is computed when
+//! the ball is placed. A frame then costs a few dot products per cell. Only
+//! the 490 ms while the ball is squashed by the press are computed live.
 
-use std::collections::HashMap;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 
 use ratatui::buffer::Buffer;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
 
-use super::color::{color, Mat, Tier};
-use super::shape::*;
+use super::color::Mat;
+use super::color::Palette;
+use super::color::Tier;
+use super::geometry::Geo;
+use super::geometry::Place;
+use super::geometry::coverage;
+use super::geometry::press;
+use super::grains::Grains;
+use super::lighting::Light;
+use super::lighting::V3;
+use super::lighting::nori_shade;
+use super::lighting::norm;
+use super::lighting::normal;
+use super::lighting::shade;
+use super::shape::BRAILLE_BITS;
+use super::shape::QUAD;
+use super::shape::braille;
+use super::shape::ease_out;
+use super::shape::hash;
+use super::shape::sd_ball;
+use super::shape::smooth;
+use super::timeline::NORI_AT;
+use super::timeline::NORI_DUR;
+use super::timeline::PRESS_AT;
+use super::timeline::PRESS_BOUNCE;
+use super::timeline::PRESS_DOWN;
+use super::timeline::PRESS_FRONT;
 
-// Intro timeline (ms).
-const GRAIN_SPREAD: f32 = 380.0;
-const GRAIN_DUR: f32 = 420.0;
-pub const PRESS_AT: f32 = 860.0;
-const PRESS_DOWN: f32 = 110.0;
-const PRESS_FRONT: f32 = 120.0;
-pub const NORI_AT: f32 = 1080.0;
-const NORI_DUR: f32 = 380.0;
-/// The light starts circling here, easing up to speed over LIGHT_RAMP.
-pub const LIGHT_AT: f32 = 1900.0;
-const LIGHT_RAMP: f32 = 1200.0;
-/// One full turn of the light.
-pub const LIGHT_PERIOD: f32 = 6000.0;
-/// Resting light: upper left.
-const LIGHT_REST: f32 = -0.75 * PI;
-const LIGHT_ELEV: f32 = 0.70;
-
-const BAND_W: f32 = 0.40;
-const BAND_FRAC: f32 = 0.36;
 const GRAIN_DENSITY: f32 = 0.50;
+/// A grain starts to glint once it is this much brighter than the rice
+/// around it.
+const GLINT_AT: f32 = 0.06;
+/// A grain starts to show as a pit once it is this much darker.
+const PIT_AT: f32 = 0.08;
+/// Brightness margin over which a grain fades from invisible to full. Full
+/// strength lands where grains used to switch on outright, so the texture
+/// reads as strongly as before. ANSI 16 cannot fade, so there grains only
+/// show at full strength.
+const GRAIN_FADE: f32 = 0.14;
 
+/// Where the cell grid starts and the paint target for one frame.
 pub struct Paint<'a> {
     pub buf: &'a mut Buffer,
-    pub tier: Tier,
+    pub pal: &'a Palette,
+    /// The area being rendered, within the buffer; nothing is drawn outside
+    /// it.
+    pub clip: Rect,
 }
 
 impl Paint<'_> {
-    /// Draw `s` at cell (`x`, `y`), clipped to the buffer.
-    pub fn put(&mut self, x: i32, y: i32, s: &str, style: Style) {
-        let area = self.buf.area;
+    /// The cell (`x`, `y`) if it lies inside the clip area.
+    fn inside(&self, x: i32, y: i32) -> Option<(u16, u16)> {
         let (Ok(x), Ok(y)) = (u16::try_from(x), u16::try_from(y)) else {
-            return;
+            return None;
         };
-        if area.contains((x, y).into()) {
-            let room = usize::from(area.right() - x);
+        self.clip.contains((x, y).into()).then_some((x, y))
+    }
+
+    /// Draw `s` starting at cell (`x`, `y`), clipped to the area.
+    pub fn put(&mut self, x: i32, y: i32, s: &str, style: Style) {
+        if let Some((x, y)) = self.inside(x, y) {
+            let room = usize::from(self.clip.right() - x);
             self.buf.set_stringn(x, y, s, room, style);
         }
     }
-    fn c(&self, m: Mat, b: f32) -> Color {
-        color(self.tier, m, b)
-    }
-}
 
-/// A ball placed on the grid: centre x in cells, top in half cells, size in
-/// cell widths.
-#[derive(Clone, Copy)]
-pub struct Place {
-    pub cx: f32,
-    pub top: f32,
-    pub s: f32,
-}
-
-impl Place {
-    /// Ball whose drawn height is `rows` cells.
-    pub fn with_rows(cx: f32, top_row: i32, rows: f32) -> Place {
-        let (vt, vb) = ball_extent();
-        Place { cx, top: top_row as f32 * 2.0, s: rows * 2.0 * ASP / (vb - vt) }
-    }
-    pub fn rows(s: f32) -> f32 {
-        let (vt, vb) = ball_extent();
-        (vb - vt) * s / ASP / 2.0
-    }
-    pub fn width(s: f32) -> f32 {
-        1.09 * s
-    }
-    /// Size whose drawn height is `rows` cells.
-    pub fn size_for(rows: f32) -> f32 {
-        let (vt, vb) = ball_extent();
-        rows * 2.0 * ASP / (vb - vt)
-    }
-    /// Baseline in half cells.
-    pub fn base(&self) -> f32 {
-        self.top + Place::rows(self.s) * 2.0
-    }
-}
-
-struct Geo {
-    p: Place,
-    vtop: f32,
-    rows: (i32, i32),
-    cols: (i32, i32),
-    band_cols: (i32, i32),
-    band_top: i32,
-}
-
-impl Geo {
-    fn new(p: Place) -> Self {
-        let (vtop, _) = ball_extent();
-        let r0 = (p.top / 2.0).floor() as i32;
-        let r1 = (p.base() / 2.0).ceil() as i32;
-        let half_w = 0.62 * p.s;
-        let band_rows = (((r1 - r0) as f32 * BAND_FRAC).round() as i32).max(1);
-        Geo {
-            p,
-            vtop,
-            rows: (r0 - 1, r1 + 1),
-            cols: ((p.cx - half_w).floor() as i32, (p.cx + half_w).ceil() as i32),
-            band_cols: (
-                (p.cx - BAND_W * p.s / 2.0).round() as i32,
-                (p.cx + BAND_W * p.s / 2.0).round() as i32,
-            ),
-            band_top: r1 - band_rows,
+    /// Draw one single-width glyph at cell (`x`, `y`), clipped to the area.
+    pub fn glyph(&mut self, x: i32, y: i32, s: &'static str, style: Style) {
+        if let Some(c) = self.inside(x, y).and_then(|at| self.buf.cell_mut(at)) {
+            c.set_symbol(s).set_style(style);
         }
     }
-    /// Cell-space point (x in cells, y in half cells) to ball units,
-    /// squashed about the bottom centre.
-    fn local(&self, x: f32, y: f32, squash: f32) -> (f32, f32) {
-        let u = (x - self.p.cx) / self.p.s;
-        let v = (y - self.p.top) * ASP / self.p.s + self.vtop;
-        let (sx, sy) = (1.0 + 0.06 * squash, 1.0 - 0.10 * squash);
-        let (_, vbot) = ball_extent();
-        (u / sx, vbot + (v - vbot) / sy)
+
+    pub fn tier(&self) -> Tier {
+        self.pal.tier
+    }
+
+    fn c(&self, m: Mat, b: f32) -> Color {
+        self.pal.color(m, b)
     }
 }
 
-/// Squash of the ball at time `t` (positive = pressed flat).
-fn press(t: f32) -> f32 {
-    if t < PRESS_AT {
-        0.0
-    } else if t < PRESS_AT + PRESS_DOWN {
-        smooth((t - PRESS_AT) / PRESS_DOWN)
-    } else {
-        let tau = (t - PRESS_AT - PRESS_DOWN) / 380.0;
-        if tau > 1.0 { 0.0 } else { (-4.2 * tau).exp() * (tau * TAU * 1.15).cos() }
+/// One Braille dot that belongs to a grain, and the grain's surface normal.
+#[derive(Debug, Clone, Copy, Default)]
+struct Grain {
+    bit: i32,
+    n: V3,
+}
+
+/// The time-independent part of a rice cell.
+#[derive(Debug, Clone, Copy)]
+enum Rice {
+    /// Partly covered: a quadrant glyph in the rice colour.
+    Edge { mask: i32, n: V3 },
+    /// Fully covered on a ball too small for texture.
+    Smooth { n: V3 },
+    /// Fully covered with grain texture. `top`/`bot` shade the two halves
+    /// when no grain shows.
+    Textured {
+        n: V3,
+        top: V3,
+        bot: V3,
+        grains: [Grain; 8],
+        count: i32,
+    },
+}
+
+impl Rice {
+    fn at(g: &Geo, cx: i32, cy: i32, squash: f32, texture: bool) -> Option<Rice> {
+        let mask = coverage(g, cx, cy, squash);
+        if mask == 0 {
+            return None;
+        }
+        let at = |dy: f32| {
+            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, squash);
+            normal(u, v)
+        };
+        let n = at(1.0);
+        if mask != 15 {
+            return Some(Rice::Edge { mask, n });
+        }
+        if !texture {
+            return Some(Rice::Smooth { n });
+        }
+        let mut grains = [Grain::default(); 8];
+        let mut count = 0;
+        let (lx, ly) = (g.cols.0 * 2, g.rows.0 * 4);
+        for (r, row) in BRAILLE_BITS.iter().enumerate() {
+            for (c, bit) in row.iter().enumerate() {
+                let bx = cx * 2 + c as i32 - lx;
+                let by = cy * 4 + r as i32 - ly;
+                // Grains are staggered pairs of dots sharing one tilt.
+                let id = (bx, (by + (bx & 1)) >> 1);
+                if hash(id.0 * 3 + 11, id.1 * 7 + 5) > GRAIN_DENSITY {
+                    continue;
+                }
+                let a = hash(id.0 + 101, id.1 - 33) * TAU;
+                let tilt = 0.55 + 0.35 * hash(id.0 - 9, id.1 + 71);
+                grains[count as usize] = Grain {
+                    bit: *bit,
+                    n: norm([n[0] + tilt * a.cos(), n[1] + tilt * a.sin(), n[2]]),
+                };
+                count += 1;
+            }
+        }
+        Some(Rice::Textured {
+            n,
+            top: at(0.5),
+            bot: at(1.5),
+            grains,
+            count,
+        })
     }
-}
 
-/// Light direction in screen space (x right, y down, z toward the viewer).
-pub fn light(t: f32, animate: bool) -> [f32; 3] {
-    let tau = if animate { (t - LIGHT_AT).max(0.0) } else { 0.0 };
-    // Constant acceleration over the ramp, then constant speed.
-    let w = TAU / LIGHT_PERIOD;
-    let phase = if tau < LIGHT_RAMP { w * tau * tau / (2.0 * LIGHT_RAMP) } else { w * (tau - LIGHT_RAMP / 2.0) };
-    let th = LIGHT_REST + phase;
-    let (ce, se) = (LIGHT_ELEV.cos(), LIGHT_ELEV.sin());
-    [ce * th.cos(), ce * th.sin(), se]
-}
-
-fn norm(v: [f32; 3]) -> [f32; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-6);
-    [v[0] / l, v[1] / l, v[2] / l]
-}
-
-fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-/// Height of the rice surface: a rounded rim falling off at the outline,
-/// on top of a gentle dome.
-fn pillow(u: f32, v: f32) -> f32 {
-    // Rounded profile from the outline to the deepest interior point, so the
-    // whole body is one surface.
-    const DEPTH: f32 = 0.36;
-    let s = clamp01(-sd_ball(u, v) / DEPTH);
-    (1.0 - (1.0 - s) * (1.0 - s)).sqrt() * DEPTH * 0.8
-}
-
-/// The pillow blurred a little so the triangle's medial creases soften.
-fn height(u: f32, v: f32) -> f32 {
-    const R: f32 = 0.045;
-    const TAPS: [(f32, f32); 7] =
-        [(0.0, 0.0), (1.0, 0.0), (-1.0, 0.0), (0.5, 0.87), (-0.5, 0.87), (0.5, -0.87), (-0.5, -0.87)];
-    TAPS.iter().map(|(a, b)| pillow(u + a * R, v + b * R)).sum::<f32>() / TAPS.len() as f32
-}
-
-fn normal(u: f32, v: f32) -> [f32; 3] {
-    let e = 0.006;
-    let dx = (height(u + e, v) - height(u - e, v)) / (2.0 * e);
-    let dy = (height(u, v + e) - height(u, v - e)) / (2.0 * e);
-    norm([-dx, -dy, 1.0])
-}
-
-fn shade(n: [f32; 3], l: [f32; 3]) -> f32 {
-    let diffuse = dot(n, l).max(0.0);
-    let h = norm([l[0], l[1], l[2] + 1.0]);
-    let spec = dot(n, h).max(0.0).powi(48);
-    0.20 + 0.66 * diffuse + 0.32 * spec
-}
-
-/// Majority-coverage quadrant mask of the ball in a cell (bit order as QUAD).
-fn coverage(g: &Geo, cx: i32, cy: i32, squash: f32, scale: f32) -> u32 {
-    let mut mask = 0;
-    for q in 0..4 {
-        let (qx, qy) = ((q % 2) as f32, (q / 2) as f32);
-        let mut n = 0;
-        for j in 0..3 {
-            for i in 0..3 {
-                let x = cx as f32 + qx * 0.5 + (i as f32 + 0.5) / 6.0;
-                let y = 2.0 * cy as f32 + qy + (j as f32 + 0.5) / 3.0;
-                let (u, v) = g.local(x, y, squash);
-                if sd_ball(u / scale, v / scale) < 0.0 {
-                    n += 1;
+    fn draw(&self, p: &mut Paint, cx: i32, cy: i32, light: &Light) {
+        match *self {
+            Rice::Edge { mask, n } => {
+                let fg = p.c(Mat::Rice, shade(n, light));
+                p.glyph(cx, cy, QUAD[mask as usize], Style::default().fg(fg));
+            }
+            Rice::Smooth { n } => {
+                let bg = p.c(Mat::Rice, shade(n, light));
+                p.glyph(cx, cy, " ", Style::default().bg(bg));
+            }
+            Rice::Textured {
+                n,
+                top,
+                bot,
+                grains,
+                count,
+            } => {
+                let b = shade(n, light);
+                let bg = p.c(Mat::Rice, b);
+                let fades = p.tier() != Tier::Ansi16;
+                let (glint_at, pit_at) = if fades {
+                    (GLINT_AT, PIT_AT)
+                } else {
+                    (GLINT_AT + GRAIN_FADE, f32::INFINITY)
+                };
+                let (mut glint, mut pit) = (0, 0);
+                let (mut glint_k, mut pit_k) = (0.0f32, 0.0f32);
+                for grain in &grains[..count as usize] {
+                    let d = shade(grain.n, light) - b;
+                    if d > glint_at {
+                        glint |= grain.bit;
+                        glint_k = glint_k.max(smooth((d - GLINT_AT) / GRAIN_FADE));
+                    } else if -d > pit_at {
+                        pit |= grain.bit;
+                        pit_k = pit_k.max(smooth((-d - PIT_AT) / GRAIN_FADE));
+                    }
+                }
+                let (glints, pitted) = (glint.count_ones(), pit.count_ones());
+                if glints >= pitted && glint != 0 {
+                    let to = (b + 0.35).min(1.0);
+                    let fg = p.c(Mat::Glint, b + (to - b) * glint_k);
+                    p.glyph(cx, cy, braille(glint), Style::default().fg(fg).bg(bg));
+                } else if pit != 0 {
+                    let to = (b - 0.20).max(0.0);
+                    let fg = p.c(Mat::Pit, b + (to - b) * pit_k);
+                    p.glyph(cx, cy, braille(pit), Style::default().fg(fg).bg(bg));
+                } else {
+                    // No grain here: split the cell so shading gets two rows
+                    // of detail.
+                    let top = p.c(Mat::Rice, shade(top, light));
+                    let bot = p.c(Mat::Rice, shade(bot, light));
+                    p.glyph(cx, cy, "▀", Style::default().fg(top).bg(bot));
                 }
             }
         }
-        if n >= 5 {
-            mask |= 1 << q;
-        }
     }
-    mask
 }
 
-fn rice_cell(p: &mut Paint, g: &Geo, cx: i32, cy: i32, squash: f32, l: [f32; 3], texture: bool) {
-    let mask = coverage(g, cx, cy, squash, 1.0);
-    if mask == 0 {
-        return;
-    }
-    let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + 1.0, squash);
-    let n = normal(u, v);
-    let b = shade(n, l);
-    if mask != 15 {
-        p.put(cx, cy, QUAD[mask as usize], Style::default().fg(p.c(Mat::Rice, b)));
-        return;
-    }
-    let bg = p.c(Mat::Rice, b);
-    if !texture {
-        p.put(cx, cy, " ", Style::default().bg(bg));
-        return;
-    }
-    let (mut glint, mut pit) = (0u32, 0u32);
-    let (lx, ly) = (g.cols.0 * 2, g.rows.0 * 4);
-    for (r, row) in BRAILLE_BITS.iter().enumerate() {
-        for (c, bit) in row.iter().enumerate() {
-            let bx = cx * 2 + c as i32 - lx;
-            let by = cy * 4 + r as i32 - ly;
-            // Grains are staggered pairs of dots sharing one tilt.
-            let id = (bx, (by + (bx & 1)) >> 1);
-            if hash(id.0 * 3 + 11, id.1 * 7 + 5) > GRAIN_DENSITY {
-                continue;
-            }
-            let a = hash(id.0 + 101, id.1 - 33) * TAU;
-            let tilt = 0.55 + 0.35 * hash(id.0 - 9, id.1 + 71);
-            let ng = norm([n[0] + tilt * a.cos(), n[1] + tilt * a.sin(), n[2]]);
-            let bg_ = shade(ng, l);
-            if bg_ - b > 0.20 {
-                glint |= bit;
-            } else if b - bg_ > 0.22 && p.tier != Tier::Ansi16 {
-                pit |= bit;
-            }
-        }
-    }
-    if glint.count_ones() >= pit.count_ones() && glint != 0 {
-        let fg = p.c(Mat::Glint, (b + 0.35).min(1.0));
-        p.put(cx, cy, &braille(glint), Style::default().fg(fg).bg(bg));
-    } else if pit != 0 {
-        let fg = p.c(Mat::Pit, (b - 0.20).max(0.0));
-        p.put(cx, cy, &braille(pit), Style::default().fg(fg).bg(bg));
-    } else {
-        // No grain here: split the cell so shading gets two rows of detail.
-        let half = |dy: f32| {
-            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, squash);
-            p.c(Mat::Rice, shade(normal(u, v), l))
+/// The time-independent part of a nori band cell.
+#[derive(Debug, Clone, Copy)]
+enum Nori {
+    Edge { mask: i32, n: V3 },
+    Full { top: V3, bot: V3 },
+}
+
+impl Nori {
+    fn at(g: &Geo, cx: i32, cy: i32) -> Option<Nori> {
+        let mask = coverage(g, cx, cy, 0.0);
+        let at = |dy: f32| {
+            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, 0.0);
+            normal(u, v)
         };
-        let (top, bot) = (half(0.5), half(1.5));
-        p.put(cx, cy, "▀", Style::default().fg(top).bg(bot));
+        match mask {
+            0 => None,
+            15 => Some(Nori::Full {
+                top: at(0.5),
+                bot: at(1.5),
+            }),
+            mask => Some(Nori::Edge { mask, n: at(1.0) }),
+        }
+    }
+
+    fn draw(&self, p: &mut Paint, cx: i32, cy: i32, light: &Light) {
+        match *self {
+            Nori::Full { top, bot } => {
+                let fg = p.c(Mat::Nori, nori_shade(top, light));
+                let bg = p.c(Mat::Nori, nori_shade(bot, light));
+                p.glyph(cx, cy, "▀", Style::default().fg(fg).bg(bg));
+            }
+            Nori::Edge { mask, n } => {
+                let fg = p.c(Mat::Nori, nori_shade(n, light));
+                p.glyph(cx, cy, QUAD[mask as usize], Style::default().fg(fg));
+            }
+        }
     }
 }
 
-fn nori_cell(p: &mut Paint, g: &Geo, cx: i32, cy: i32, l: [f32; 3]) {
-    let mask = coverage(g, cx, cy, 0.0, 1.0);
-    if mask == 0 {
-        return;
-    }
-    // The sheet follows the rice surface but is only faintly glossy.
-    let lum = |dy: f32| {
-        let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, 0.0);
-        let n = normal(u, v);
-        let h = norm([l[0], l[1], l[2] + 1.0]);
-        let gloss = dot(n, h).max(0.0).powi(16);
-        p.c(Mat::Nori, 0.32 + 0.20 * (dot(n, l) - 0.6) + 0.35 * gloss)
-    };
-    if mask == 15 {
-        p.put(cx, cy, "▀", Style::default().fg(lum(0.5)).bg(lum(1.5)));
-    } else {
-        p.put(cx, cy, QUAD[mask as usize], Style::default().fg(lum(1.0)));
-    }
+struct Cell {
+    x: i32,
+    y: i32,
+    /// The rice here once the ball has settled; the box includes empty
+    /// cells.
+    rice: Option<Rice>,
+    /// The band here; only cells in the band's columns have one.
+    nori: Option<Nori>,
 }
 
-/// Draw the ball at time `t`. `intro` plays gather/press/wrap; otherwise the
-/// ball is settled. `animate_light` lets the light circle after LIGHT_AT.
-pub fn draw_ball(p: &mut Paint, place: Place, t: f32, intro: bool, animate_light: bool, texture: bool) {
-    let g = Geo::new(place);
-    let t_shape = if intro { t } else { 1.0e6 };
-    let squash = press(t_shape);
-    let l = light(t, animate_light);
-    let steps = ((t_shape - NORI_AT) / NORI_DUR * (g.rows.1 - 1 - g.band_top) as f32).ceil() as i32;
-    let band_top = (g.rows.1 - 1 - steps.max(0)).max(g.band_top);
-    let in_band = |cx: i32, cy: i32| {
-        t_shape >= NORI_AT && cx >= g.band_cols.0 && cx < g.band_cols.1 && cy >= band_top
-    };
-    let front = if t_shape >= PRESS_AT {
-        0.25 + 0.85 * ease_out((t_shape - PRESS_AT) / PRESS_FRONT)
+/// A placed ball with its geometry baked.
+pub struct Ball {
+    g: Geo,
+    texture: bool,
+    cells: Vec<Cell>,
+    grains: Grains,
+}
+
+/// The press front: how far out from the centre the pressed rice reaches.
+fn front(t: f32) -> f32 {
+    if t >= PRESS_AT {
+        0.25 + 0.85 * ease_out((t - PRESS_AT) / PRESS_FRONT)
     } else {
         -1.0
-    };
-    let pressed = |cx: i32, cy: i32| {
-        let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + 1.0, 0.0);
-        front > 0.0 && sd_ball(u / front.max(0.01), v / front.max(0.01)) < 0.0
-    };
+    }
+}
 
-    if front < 1.09 {
-        for (cell, bits, landed) in grains(&g, t_shape) {
-            if pressed(cell.0, cell.1) || cell.1 >= g.rows.1 + 2 {
-                continue;
+/// When the press front and the squash stop changing.
+const PRESS_DONE: f32 = PRESS_AT + PRESS_DOWN + PRESS_BOUNCE;
+
+impl Ball {
+    /// `flies` bakes the intro's flying grains, which only balls that play
+    /// the intro need.
+    pub fn new(place: Place, texture: bool, flies: bool) -> Ball {
+        let g = Geo::new(place);
+        let settled = front(PRESS_DONE);
+        let mut cells = Vec::new();
+        for cy in g.rows.0..g.rows.1 {
+            for cx in g.cols.0..g.cols.1 {
+                let rice = if pressed(&g, cx, cy, settled) {
+                    Rice::at(&g, cx, cy, 0.0, texture)
+                } else {
+                    None
+                };
+                let nori = if g.in_band_cols(cx) && cy >= g.band_top {
+                    Nori::at(&g, cx, cy)
+                } else {
+                    None
+                };
+                // Every cell in the box is kept: the squashed ball during the
+                // press can cover cells the settled ball does not.
+                cells.push(Cell {
+                    x: cx,
+                    y: cy,
+                    rice,
+                    nori,
+                });
             }
-            let style = match (p.tier, landed > 0) {
-                (Tier::Ansi16, true) => Style::default(),
-                (Tier::Ansi16, false) => Style::default().add_modifier(Modifier::DIM),
-                (_, true) => Style::default().fg(p.c(Mat::Rice, 0.80)),
-                (_, false) => Style::default().fg(p.c(Mat::Rice, 0.42)),
-            };
-            p.put(cell.0, cell.1, &braille(bits), style);
+        }
+        Ball {
+            g,
+            texture,
+            cells,
+            grains: if flies {
+                Grains::new(&g)
+            } else {
+                Grains::none()
+            },
         }
     }
-    for cy in g.rows.0..g.rows.1 {
-        for cx in g.cols.0..g.cols.1 {
-            if in_band(cx, cy) {
-                nori_cell(p, &g, cx, cy, l);
-            } else if pressed(cx, cy) {
-                rice_cell(p, &g, cx, cy, squash, l, texture);
+
+    /// Draw the ball at time `t`. `intro` plays gather/press/wrap;
+    /// otherwise the ball is settled.
+    pub fn draw(&mut self, p: &mut Paint, t: f32, intro: bool, light: &Light) {
+        let g = self.g;
+        let t_shape = if intro { t } else { 1.0e6 };
+        let front = front(t_shape);
+        let steps =
+            ((t_shape - NORI_AT) / NORI_DUR * (g.rows.1 - 1 - g.band_top) as f32).ceil() as i32;
+        let band_top = (g.rows.1 - 1 - steps.max(0)).max(g.band_top);
+        let banded = t_shape >= NORI_AT;
+
+        if front < 1.09 {
+            let tier = p.tier();
+            let landed = match tier {
+                Tier::Ansi16 => Style::default(),
+                Tier::True | Tier::X256 => Style::default().fg(p.c(Mat::Rice, 0.80)),
+            };
+            let flying = match tier {
+                Tier::Ansi16 => Style::default().add_modifier(Modifier::DIM),
+                Tier::True | Tier::X256 => Style::default().fg(p.c(Mat::Rice, 0.42)),
+            };
+            for (cx, cy, bits, settled) in self.grains.at(t_shape) {
+                if cy >= g.rows.1 + 2 || pressed(&g, cx, cy, front) {
+                    continue;
+                }
+                p.glyph(cx, cy, braille(bits), if settled { landed } else { flying });
+            }
+        }
+        if front < 0.0 {
+            return;
+        }
+        let live = t_shape < PRESS_DONE;
+        let squash = press(t_shape);
+        for cell in &self.cells {
+            let (cx, cy) = (cell.x, cell.y);
+            if banded && g.in_band_cols(cx) && cy >= band_top {
+                if let Some(nori) = cell.nori {
+                    nori.draw(p, cx, cy, light);
+                }
+            } else if live {
+                if pressed(&g, cx, cy, front)
+                    && let Some(rice) = Rice::at(&g, cx, cy, squash, self.texture)
+                {
+                    rice.draw(p, cx, cy, light);
+                }
+            } else if let Some(rice) = cell.rice {
+                rice.draw(p, cx, cy, light);
             }
         }
     }
 }
 
-/// Loose grains before the press: a subset of the ball's dots flying in from
-/// a larger, looser cloud of the same shape. Returns per-cell dot bits and
-/// whether more dots there have landed than are still flying.
-fn grains(g: &Geo, t: f32) -> Vec<((i32, i32), u32, i32)> {
-    let mut cells: HashMap<(i32, i32), (u32, i32)> = HashMap::new();
-    let mid_y = g.p.top + Place::rows(g.p.s) * 2.0 * 0.55;
-    // Fly distance scales with the ball so small balls stay on screen.
-    let fly = (g.p.s / 11.0).clamp(1.0, 3.5);
-    for by in (g.rows.0 * 4)..(g.rows.1 * 4) {
-        for bx in (g.cols.0 * 2)..(g.cols.1 * 2) {
-            let (x, y) = ((bx as f32 + 0.5) / 2.0, (by as f32 + 0.5) / 2.0);
-            let (u, v) = g.local(x, y, 0.0);
-            if sd_ball(u, v) >= 0.0 || hash(bx, by) > 0.6 {
-                continue;
-            }
-            let h2 = hash(by + 911, bx - 77);
-            let h3 = hash(bx * 3 + 5, by * 5 + 9);
-            let dist = u.hypot(v);
-            let start = GRAIN_SPREAD * (0.55 * h2 + 0.45 * (1.0 - dist * 1.8).max(0.0));
-            let k = ease_out((t - start) / (GRAIN_DUR * (0.8 + 0.4 * h3)));
-            let ang = h3 * TAU;
-            let spread = 0.25 + 0.45 * h2;
-            let sx = x + (x - g.p.cx) * spread + ang.cos() * fly;
-            let sy = y + (y - mid_y) * spread + ang.sin() * fly;
-            let (px, py) = (sx + (x - sx) * k, sy + (y - sy) * k);
-            let (dbx, dby) = ((px * 2.0).floor() as i32, (py * 2.0).floor() as i32);
-            let e = cells.entry((dbx.div_euclid(2), dby.div_euclid(4))).or_insert((0, 0));
-            e.0 |= BRAILLE_BITS[dby.rem_euclid(4) as usize][dbx.rem_euclid(2) as usize];
-            e.1 += if k > 0.97 { 1 } else { -1 };
-        }
-    }
-    cells.into_iter().map(|(c, (b, l))| (c, b, l)).collect()
+/// Whether the press front has reached the centre of cell (`cx`, `cy`).
+fn pressed(g: &Geo, cx: i32, cy: i32, front: f32) -> bool {
+    let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + 1.0, 0.0);
+    front > 0.0 && sd_ball(u / front.max(0.01), v / front.max(0.01)) < 0.0
 }

@@ -1,6 +1,6 @@
 //! Picks the arrangement and ball size that fit a terminal.
 
-use super::ball::Place;
+use super::geometry::Place;
 use super::word;
 
 /// Smallest ball (rows) that plays the full intro with particles.

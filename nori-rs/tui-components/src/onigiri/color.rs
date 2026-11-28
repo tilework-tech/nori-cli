@@ -5,6 +5,7 @@
 
 use ratatui::style::Color;
 
+/// How many colours the terminal can show.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tier {
     True,
@@ -13,6 +14,7 @@ pub enum Tier {
 }
 
 impl Tier {
+    /// Guess from `COLORTERM` and `TERM`.
     pub fn detect() -> Tier {
         let colorterm = std::env::var("COLORTERM").unwrap_or_default();
         let term = std::env::var("TERM").unwrap_or_default();
@@ -25,12 +27,12 @@ impl Tier {
         }
     }
 
-    pub fn parse(s: &str) -> Tier {
+    pub fn parse(s: &str) -> Option<Tier> {
         match s {
-            "true" | "truecolor" | "24bit" => Tier::True,
-            "256" => Tier::X256,
-            "16" | "ansi" => Tier::Ansi16,
-            other => panic!("unknown colour tier {other}"),
+            "true" | "truecolor" | "24bit" => Some(Tier::True),
+            "256" => Some(Tier::X256),
+            "16" | "ansi" => Some(Tier::Ansi16),
+            _ => None,
         }
     }
 }
@@ -60,7 +62,12 @@ const RICE: [Rgb; 5] = [
     (0xff, 0xff, 0xff),
 ];
 /// Nori ramp, the verdant greens from the palette.
-const NORI: [Rgb; 4] = [(0x10, 0x16, 0x12), (0x17, 0x25, 0x1b), (0x1b, 0x3a, 0x27), (0x2c, 0x6b, 0x41)];
+const NORI: [Rgb; 4] = [
+    (0x10, 0x16, 0x12),
+    (0x17, 0x25, 0x1b),
+    (0x1b, 0x3a, 0x27),
+    (0x2c, 0x6b, 0x41),
+];
 const GREEN: Rgb = (0x42, 0xbe, 0x65);
 
 fn ramp(stops: &[Rgb], b: f32) -> Rgb {
@@ -83,7 +90,11 @@ fn rgb(m: Mat, b: f32) -> Rgb {
 /// Nearest xterm-256 colour (6x6x6 cube or the 24-step grey ramp).
 fn to256((r, g, b): Rgb) -> u8 {
     const LV: [i32; 6] = [0, 95, 135, 175, 215, 255];
-    let near = |c: u8| (0..6).min_by_key(|&i| (LV[i] - c as i32).abs()).unwrap_or(0);
+    let near = |c: u8| {
+        (0..6)
+            .min_by_key(|&i| (LV[i] - c as i32).abs())
+            .unwrap_or(0)
+    };
     let (ci, cj, ck) = (near(r), near(g), near(b));
     let cube = (LV[ci], LV[cj], LV[ck]);
     let avg = (r as i32 + g as i32 + b as i32) / 3;
@@ -117,6 +128,43 @@ fn ansi16(m: Mat, b: f32) -> Color {
     }
 }
 
+/// Shade steps per material in truecolor and 256 colours. Colours closer
+/// than this repaint nothing, which keeps the light loop's output small.
+const LEVELS: usize = 64;
+
+/// Colours for one tier, looked up by material and brightness.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Palette {
+    pub tier: Tier,
+    rice: [Color; LEVELS],
+    nori: [Color; LEVELS],
+}
+
+impl Palette {
+    pub fn new(tier: Tier) -> Palette {
+        let ramp = |m: Mat| std::array::from_fn(|i| color(tier, m, i as f32 / (LEVELS - 1) as f32));
+        Palette {
+            tier,
+            rice: ramp(Mat::Rice),
+            nori: ramp(Mat::Nori),
+        }
+    }
+
+    pub fn color(&self, m: Mat, b: f32) -> Color {
+        let i = (b.clamp(0.0, 1.0) * (LEVELS - 1) as f32).round() as usize;
+        match (self.tier, m) {
+            (Tier::Ansi16, m) => ansi16(m, b),
+            (Tier::True | Tier::X256, Mat::Rice | Mat::Glint | Mat::Pit) => self.rice[i],
+            (Tier::True | Tier::X256, Mat::Nori) => self.nori[i],
+            (Tier::True | Tier::X256, Mat::Green) => color(self.tier, m, b),
+        }
+    }
+}
+
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the welcome art is drawn in its own palette at every colour depth the terminal supports"
+)]
 pub fn color(tier: Tier, m: Mat, b: f32) -> Color {
     match tier {
         Tier::True => {

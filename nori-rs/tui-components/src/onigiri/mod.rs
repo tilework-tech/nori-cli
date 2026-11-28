@@ -1,18 +1,38 @@
 //! Onigiri: the animated first-launch welcome.
 //!
-//! The ball sizes itself to the area. With room for it (a ball at least
-//! [`layout::INTRO_ROWS`] tall) the full welcome plays: grains gather, get
+//! The ball sizes itself to the area. With room for it (a ball at least 11
+//! rows tall) the full welcome plays: grains gather, get
 //! pressed, the nori band wraps, then a light circles the rice. Smaller areas
 //! get the settled ball, and the light keeps circling while the ball is big
-//! enough to carry grain texture. Colour adapts to truecolor, 256 and ANSI 16.
+//! enough to carry grain texture. Areas too small for a ball get a one-line
+//! text wordmark. Colour adapts to truecolor, 256 and ANSI 16
+//! ([`Tier::detect`]).
+//!
+//! The caller owns the frame loop: call [`Onigiri::render`] with the time since
+//! the welcome started and schedule the next frame from
+//! [`Onigiri::next_frame_in`]. It returns the fast intro cadence until the ball
+//! settles, the slower light-loop cadence after, and `None` once nothing moves.
+//!
+//! Rendering is built to be cheap. Everything that depends only on the area
+//! (coverage, surface normals, grain tilts, the intro grain paths) is baked
+//! once into a cached `Scene` and rebuilt only when the area changes, so a
+//! loop frame computes lighting alone. The light moves on a fixed tick, so a
+//! given tick always draws the same frame, and brightness is quantized through
+//! a palette lookup so fewer cells change between frames. Only the short press
+//! squash is computed live.
 //!
 //! The demo runner (`cargo run --release -p nori-tui-components --example
-//! onigiri -- --help`) lives in `demo/` and is not part of the library.
+//! onigiri -- --live | --bench | --cast FILE`) lives in `demo/` and is not
+//! part of the library.
 
 mod ball;
 mod color;
+mod geometry;
+mod grains;
 mod layout;
+mod lighting;
 mod shape;
+mod timeline;
 mod word;
 
 #[cfg(test)]
@@ -22,21 +42,27 @@ use std::time::Duration;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 
+use ball::Ball;
 use ball::Paint;
-use ball::Place;
-use ball::draw_ball;
-pub use color::Tier;
 use color::Mat;
-use color::color;
-pub use layout::Layout;
-pub use layout::layout;
+use color::Palette;
+pub use color::Tier;
+use geometry::Place;
 use layout::INTRO_ROWS;
+pub use layout::Layout;
 use layout::TEXTURE_ROWS;
 use layout::WORD_RATIO;
+pub use layout::layout;
+use lighting::Light;
+use timeline::INTRO_FRAME;
+use timeline::LIGHT_AT;
+use timeline::LIGHT_TICK;
+use timeline::SETTLED_AT;
+use timeline::TICK_SLACK;
+use word::Word;
 
 /// Placeholder status text drawn next to the wordmark.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,18 +71,81 @@ pub struct Caption {
     pub cwd: String,
 }
 
+/// Everything about the scene that depends only on the area it fills.
+enum Scene {
+    Side {
+        rows: f32,
+        ball: Ball,
+        word: Word,
+        left: i32,
+        base: i32,
+    },
+    Stack {
+        rows: f32,
+        ball: Ball,
+        cx: f32,
+        base: f32,
+    },
+    Line,
+}
+
+impl Scene {
+    fn new(area: Rect, intro: bool) -> Scene {
+        match layout(area.width, area.height) {
+            Layout::Side { rows } => {
+                let s = Place::size_for(rows);
+                let ball_w = Place::width(s);
+                let scale = rows * WORD_RATIO;
+                let total = ball_w + 0.2 * rows + 3.0 + word::WORD_W * scale;
+                let ox = f32::from(area.x) + (f32::from(area.width) - total) / 2.0;
+                let top = i32::from(area.y)
+                    + ((f32::from(area.height) - rows - 2.0) / 2.0).round() as i32;
+                let place = Place::with_rows(ox + ball_w / 2.0, top, rows);
+                let base = place.base().round() as i32;
+                let left = (ox + ball_w + 0.2 * rows + 3.0).round() as i32;
+                let word = Word::new(left, base - (9.0 * scale).round() as i32, scale);
+                Scene::Side {
+                    rows,
+                    ball: Ball::new(place, rows >= TEXTURE_ROWS, intro && rows >= INTRO_ROWS),
+                    word,
+                    left,
+                    base,
+                }
+            }
+            Layout::Stack { rows } => {
+                let cx = f32::from(area.x) + f32::from(area.width) / 2.0;
+                let top = i32::from(area.y)
+                    + ((f32::from(area.height) - rows - 3.0) / 2.0).round() as i32;
+                let place = Place::with_rows(cx, top, rows);
+                Scene::Stack {
+                    rows,
+                    ball: Ball::new(place, rows >= TEXTURE_ROWS, intro && rows >= INTRO_ROWS),
+                    cx,
+                    base: place.base(),
+                }
+            }
+            Layout::Line => Scene::Line,
+        }
+    }
+}
+
 /// The welcome animation. Render it every frame with the time since it
-/// started.
-#[derive(Debug, Clone)]
+/// started; [`Onigiri::next_frame_in`] says when the next frame is due.
 pub struct Onigiri {
-    tier: Tier,
+    pal: Palette,
     intro: bool,
     caption: Caption,
+    scene: Option<(Rect, Scene)>,
 }
 
 impl Onigiri {
     pub fn new(tier: Tier, caption: Caption) -> Self {
-        Self { tier, intro: true, caption }
+        Self {
+            pal: Palette::new(tier),
+            intro: true,
+            caption,
+            scene: None,
+        }
     }
 
     /// Skip the intro and draw the settled ball with a still light.
@@ -65,51 +154,88 @@ impl Onigiri {
         self
     }
 
+    /// How long until the next frame is due, or `None` once nothing moves.
+    pub fn next_frame_in(&self, elapsed: Duration, area: Rect) -> Option<Duration> {
+        let rows = match layout(area.width, area.height) {
+            Layout::Side { rows } | Layout::Stack { rows } => rows,
+            Layout::Line => return None,
+        };
+        let t = elapsed.as_secs_f32() * 1000.0;
+        let until =
+            |at: f32| Some(Duration::from_secs_f32((at - t).max(0.0) / 1000.0) + TICK_SLACK);
+        if !self.intro || rows < TEXTURE_ROWS {
+            None
+        } else if rows >= INTRO_ROWS && t < SETTLED_AT {
+            Some(INTRO_FRAME)
+        } else if t < LIGHT_AT {
+            until(LIGHT_AT)
+        } else {
+            until(((t / LIGHT_TICK).floor() + 1.0) * LIGHT_TICK)
+        }
+    }
+
     pub fn render(&mut self, elapsed: Duration, area: Rect, buf: &mut Buffer) {
+        if self.scene.as_ref().is_none_or(|(a, _)| *a != area) {
+            self.scene = Some((area, Scene::new(area, self.intro)));
+        }
+        let Some((_, scene)) = self.scene.as_mut() else {
+            return;
+        };
         let t = elapsed.as_secs_f32() * 1000.0;
         let settled = !self.intro;
         let dim = Style::default().add_modifier(Modifier::DIM);
         let bold = Style::default().add_modifier(Modifier::BOLD);
         let caption = &self.caption;
-        let mut p = Paint { buf, tier: self.tier };
-        match layout(area.width, area.height) {
-            Layout::Side { rows } => {
-                let intro = !settled && rows >= INTRO_ROWS;
+        let clip = area.intersection(buf.area);
+        let mut p = Paint {
+            buf,
+            pal: &self.pal,
+            clip,
+        };
+        match scene {
+            Scene::Side {
+                rows,
+                ball,
+                word,
+                left,
+                base,
+            } => {
+                let intro = !settled && *rows >= INTRO_ROWS;
                 let tw = if intro { t } else { 1.0e6 };
-                let s = Place::size_for(rows);
-                let ball_w = Place::width(s);
-                let scale = rows * WORD_RATIO;
-                let total = ball_w + 0.2 * rows + 3.0 + word::WORD_W * scale;
-                let ox = f32::from(area.x) + (f32::from(area.width) - total) / 2.0;
-                let top = i32::from(area.y) + ((f32::from(area.height) - rows - 2.0) / 2.0).round() as i32;
-                let place = Place::with_rows(ox + ball_w / 2.0, top, rows);
-                draw_ball(&mut p, place, t, intro, !settled && rows >= TEXTURE_ROWS, rows >= TEXTURE_ROWS);
-                let base = place.base().round() as i32;
-                let left = (ox + ball_w + 0.2 * rows + 3.0).round() as i32;
-                word::draw_word(&mut p, left, base - (9.0 * scale).round() as i32, tw, scale);
+                let light = Light::at(t, !settled && *rows >= TEXTURE_ROWS);
+                ball.draw(&mut p, t, intro, &light);
+                word.draw(&mut p, tw);
                 if tw >= word::VERSION_AT {
-                    let y = base / 2 + 1;
+                    let (left, y) = (*left, *base / 2 + 1);
                     p.put(left, y, "cli", Style::default());
                     p.put(left + 4, y, &caption.version, dim);
-                    p.put(left + 6 + caption.version.chars().count() as i32, y, &caption.cwd, dim);
+                    p.put(
+                        left + 6 + caption.version.chars().count() as i32,
+                        y,
+                        &caption.cwd,
+                        dim,
+                    );
                 }
             }
-            Layout::Stack { rows } => {
-                let intro = !settled && rows >= INTRO_ROWS;
+            Scene::Stack {
+                rows,
+                ball,
+                cx,
+                base,
+            } => {
+                let intro = !settled && *rows >= INTRO_ROWS;
                 let tw = if intro { t } else { 1.0e6 };
-                let cx = f32::from(area.x) + f32::from(area.width) / 2.0;
-                let top = i32::from(area.y) + ((f32::from(area.height) - rows - 3.0) / 2.0).round() as i32;
-                let place = Place::with_rows(cx, top, rows);
-                draw_ball(&mut p, place, t, intro, !settled && rows >= TEXTURE_ROWS, rows >= TEXTURE_ROWS);
+                let light = Light::at(t, !settled && *rows >= TEXTURE_ROWS);
+                ball.draw(&mut p, t, intro, &light);
                 if tw >= word::WORD_AT {
-                    let y = (place.base() / 2.0).round() as i32 + 1;
-                    let x = (cx - 8.0).round() as i32;
+                    let y = (*base / 2.0).round() as i32 + 1;
+                    let x = (*cx - 8.0).round() as i32;
                     text_wordmark(&mut p, x, y, tw >= word::DOT_AT);
                     p.put(x + 5, y, "cli", Style::default());
                     p.put(x + 9, y, &caption.version, dim);
                 }
             }
-            Layout::Line => {
+            Scene::Line => {
                 let y = i32::from(area.y + area.height / 2);
                 let x = i32::from(area.x) + 1;
                 text_wordmark(&mut p, x, y, true);
@@ -125,7 +251,7 @@ fn text_wordmark(p: &mut Paint, x: i32, y: i32, dot: bool) {
     let bold = Style::default().add_modifier(Modifier::BOLD);
     p.put(x, y, "nor", bold);
     if dot {
-        let green: Color = color(p.tier, Mat::Green, 1.0);
+        let green = p.pal.color(Mat::Green, 1.0);
         p.put(x + 3, y, "i", bold.fg(green));
     } else {
         p.put(x + 3, y, "ı", bold);
