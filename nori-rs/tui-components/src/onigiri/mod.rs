@@ -10,8 +10,8 @@
 //!
 //! The caller owns the frame loop: call [`Onigiri::render`] with the time since
 //! the welcome started and schedule the next frame from
-//! [`Onigiri::next_frame_in`]. It returns the fast intro cadence until the ball
-//! settles, the slower light-loop cadence after, and `None` once nothing moves.
+//! [`Onigiri::next_frame_in`]. It returns 60 fps until the ball settles, then
+//! the time to the light's next 30 Hz tick, and `None` once nothing moves.
 //!
 //! Rendering is built to be cheap. Everything that depends only on the area
 //! (coverage, surface normals, grain tilts, the intro grain paths) is baked
