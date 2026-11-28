@@ -7,7 +7,6 @@ use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 use tui_pty_e2e::has_composer_row;
-use tui_pty_e2e::normalize_for_input_snapshot;
 
 fn has_prompt_ready_marker(contents: &str) -> bool {
     [
@@ -72,26 +71,33 @@ fn test_startup_error_for_unregistered_model() {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn test_startup_shows_welcome() {
+fn test_first_launch_shows_the_setup_form() {
     let mut session = TuiSession::spawn_with_config(
         24,
         80,
         SessionConfig::default()
-            // Don't skip trust directory - allows welcome screen to show
+            // Don't skip trust directory - allows the setup form to show
             .with_skip_trust_directory(false)
             .with_config_toml(""),
     )
     .expect("Failed to spawn");
 
     session
-        .wait_for_text("Welcome to Nori", TIMEOUT)
-        .expect("Prompt did not appear");
+        .wait_for_text("Default agent", TIMEOUT)
+        .expect("First-launch setup did not appear");
     let contents = session.settled_screen();
-    assert!(contents.contains("Welcome to Nori, your AI coding assistant"));
-    assert_snapshot!(
-        "startup_shows_welcome",
-        normalize_for_input_snapshot(contents)
-    );
+    // Which agents show as signed in depends on the machine, so check the
+    // form's fixed parts rather than snapshotting it.
+    for text in [
+        "Claude Code",
+        "Permissions",
+        "‹ Agent ›",
+        "Usage stats",
+        "‹ Share ›",
+        "Enter start",
+    ] {
+        assert!(contents.contains(text), "missing {text:?} in: {contents}");
+    }
 }
 
 #[test]
@@ -269,12 +275,12 @@ fn test_trust_directory_saves_to_config() {
     )
     .expect("Failed to spawn");
 
-    // Step 1: Wait for the welcome screen
+    // Step 1: Wait for the first-launch setup form
     session
-        .wait_for_text("Welcome to Nori", TIMEOUT)
-        .expect("Welcome screen did not appear");
+        .wait_for_text("Default agent", TIMEOUT)
+        .expect("Setup form did not appear");
 
-    // Step 2: Press Enter to advance past welcome screen
+    // Step 2: Press Enter to accept the setup form
     session.send_key(Key::Enter).expect("Failed to send Enter");
 
     // Step 3: Wait for the trust directory screen

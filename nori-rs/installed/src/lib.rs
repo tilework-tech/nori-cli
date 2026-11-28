@@ -170,6 +170,28 @@ fn is_resurrected(state: &InstallState, now: chrono::DateTime<Utc>) -> bool {
     diff > Duration::days(30)
 }
 
+/// Turn product analytics off (or back on) durably, creating the install
+/// state if launch tracking has not written it yet.
+pub fn set_opt_out(nori_home: &Path, opt_out: bool) -> anyhow::Result<()> {
+    let mut state = read_install_state(nori_home).unwrap_or_else(|| {
+        InstallState::new_first_install(
+            generate_client_id(),
+            CLI_VERSION.to_string(),
+            detect_install_source(),
+            Utc::now(),
+        )
+    });
+    state.opt_out = opt_out;
+    let path = state::install_state_path(nori_home);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, format!("{}\n", serde_json::to_string_pretty(&state)?))?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

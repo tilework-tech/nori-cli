@@ -1,7 +1,8 @@
 //! Nori-specific onboarding screen.
 //!
 //! This module provides a Nori-branded onboarding flow that includes:
-//! - First-launch welcome screen (if `~/.nori/cli/config.toml` doesn't exist)
+//! - First-launch setup: the onigiri welcome and the setup form (if
+//!   `~/.nori/cli/config.toml` doesn't exist)
 //! - Directory trust prompt with Nori branding
 //!
 //! The flow is designed to be used instead of the default Codex onboarding
@@ -28,17 +29,23 @@ use super::TrustDirectorySelection;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
+use crate::version::CODEX_CLI_VERSION;
+use nori_tui_components::onigiri::Caption;
+use nori_tui_components::onigiri::Tier;
+use std::time::Duration;
 
+use super::NoriSetupStep;
 use super::NoriTrustDirectoryWidget;
-use super::NoriWelcomeWidget;
 use super::is_first_launch;
 use super::mark_first_launch_complete;
+use super::setup_form::detect_agents;
+use super::setup_form::save;
 
 /// Steps in the Nori onboarding flow.
 #[allow(clippy::large_enum_variant)]
 enum NoriStep {
-    /// First-launch welcome screen with Nori ASCII banner.
-    Welcome(NoriWelcomeWidget),
+    /// First-launch welcome and setup form.
+    Setup(NoriSetupStep),
     /// Directory trust prompt with Nori branding.
     TrustDirectory(NoriTrustDirectoryWidget),
 }
@@ -61,6 +68,8 @@ pub(crate) struct NoriOnboardingResult {
     pub directory_trust_decision: Option<TrustDirectorySelection>,
     /// Whether the user requested to exit the application.
     pub should_exit: bool,
+    /// Whether first-launch setup saved settings to config.toml.
+    pub settings_saved: bool,
 }
 
 /// Nori-branded onboarding screen.
@@ -82,15 +91,27 @@ impl NoriOnboardingScreen {
             config,
         } = args;
 
-        let cwd = config.cwd;
+        let cwd = config.cwd.clone();
         // Use Nori-specific home directory (~/.nori/cli) from the canonical config source
-        let nori_home = config.nori_home;
+        let nori_home = config.nori_home.clone();
 
         let mut steps: Vec<NoriStep> = Vec::new();
 
-        // Add welcome screen if this is the first launch and not skipped
+        // First-launch setup unless skipped
         if !skip_welcome && is_first_launch(&nori_home) {
-            steps.push(NoriStep::Welcome(NoriWelcomeWidget::new()));
+            let caption = Caption {
+                version: format!("v{CODEX_CLI_VERSION}"),
+                cwd: crate::exec_command::relativize_to_home(&cwd)
+                    .map(|p| format!("~/{}", p.display()))
+                    .unwrap_or_else(|| cwd.display().to_string()),
+            };
+            steps.push(NoriStep::Setup(NoriSetupStep::new(
+                detect_agents(&nori_home, &config),
+                None,
+                caption,
+                Tier::detect(),
+                true,
+            )));
         }
 
         // Add directory trust screen if needed (unless --skip-trust-directory is set)
@@ -164,6 +185,26 @@ impl NoriOnboardingScreen {
         })
     }
 
+    /// The setup answers, once the setup form is submitted.
+    fn setup_choices(&self) -> Option<super::setup_form::SetupChoices> {
+        self.steps.iter().find_map(|step| match step {
+            NoriStep::Setup(setup) => setup.choices(),
+            NoriStep::TrustDirectory(_) => None,
+        })
+    }
+
+    /// When the in-progress step next needs a frame for its animation.
+    fn next_frame_in(&self, area: Rect) -> Option<Duration> {
+        match self
+            .steps
+            .iter()
+            .find(|step| step.get_step_state() == StepState::InProgress)
+        {
+            Some(NoriStep::Setup(setup)) => setup.next_frame_in(area),
+            Some(NoriStep::TrustDirectory(_)) | None => None,
+        }
+    }
+
     /// Check if the user requested to exit.
     pub fn should_exit(&self) -> bool {
         self.should_exit
@@ -216,13 +257,20 @@ impl WidgetRef for &NoriOnboardingScreen {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
         Clear.render(area, buf);
 
-        if let Some(NoriStep::TrustDirectory(widget)) = self
+        match self
             .steps
             .iter()
             .find(|step| matches!(step.get_step_state(), StepState::InProgress))
         {
-            widget.render_ref(area, buf);
-            return;
+            Some(NoriStep::TrustDirectory(widget)) => {
+                widget.render_ref(area, buf);
+                return;
+            }
+            Some(NoriStep::Setup(setup)) => {
+                setup.render_ref(area, buf);
+                return;
+            }
+            None => {}
         }
 
         // Render steps top-to-bottom, measuring each step's height dynamically.
@@ -288,7 +336,7 @@ impl WidgetRef for &NoriOnboardingScreen {
 impl KeyboardHandler for NoriStep {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match self {
-            NoriStep::Welcome(widget) => widget.handle_key_event(key_event),
+            NoriStep::Setup(step) => step.handle_key_event(key_event),
             NoriStep::TrustDirectory(widget) => widget.handle_key_event(key_event),
         }
     }
@@ -297,7 +345,7 @@ impl KeyboardHandler for NoriStep {
 impl StepStateProvider for NoriStep {
     fn get_step_state(&self) -> StepState {
         match self {
-            NoriStep::Welcome(w) => w.get_step_state(),
+            NoriStep::Setup(step) => step.get_step_state(),
             NoriStep::TrustDirectory(w) => w.get_step_state(),
         }
     }
@@ -306,7 +354,7 @@ impl StepStateProvider for NoriStep {
 impl WidgetRef for NoriStep {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
         match self {
-            NoriStep::Welcome(widget) => widget.render_ref(area, buf),
+            NoriStep::Setup(step) => step.render_ref(area, buf),
             NoriStep::TrustDirectory(widget) => widget.render_ref(area, buf),
         }
     }
@@ -321,9 +369,14 @@ pub(crate) async fn run_nori_onboarding_app(
 
     let mut onboarding_screen = NoriOnboardingScreen::new(tui, args);
 
+    let mut area = Rect::default();
     tui.draw(u16::MAX, |frame| {
-        frame.render_widget_ref(&onboarding_screen, frame.area());
+        area = frame.area();
+        frame.render_widget_ref(&onboarding_screen, area);
     })?;
+    if let Some(next) = onboarding_screen.next_frame_in(area) {
+        tui.frame_requester().schedule_frame_in(next);
+    }
 
     let tui_events = tui.event_stream();
     tokio::pin!(tui_events);
@@ -338,22 +391,36 @@ pub(crate) async fn run_nori_onboarding_app(
                     // Paste not handled in Nori onboarding
                 }
                 TuiEvent::Draw => {
+                    let mut area = Rect::default();
                     let _ = tui.draw(u16::MAX, |frame| {
-                        frame.render_widget_ref(&onboarding_screen, frame.area());
+                        area = frame.area();
+                        frame.render_widget_ref(&onboarding_screen, area);
                     });
+                    if let Some(next) = onboarding_screen.next_frame_in(area) {
+                        tui.frame_requester().schedule_frame_in(next);
+                    }
                 }
             }
         }
     }
 
-    // Mark first launch as complete when onboarding finishes successfully
+    // Save the setup answers and mark first launch complete when onboarding
+    // finishes successfully.
+    let mut settings_saved = false;
     if !onboarding_screen.should_exit() {
+        if let Some(choices) = onboarding_screen.setup_choices() {
+            match save(&onboarding_screen.nori_home, &choices) {
+                Ok(()) => settings_saved = true,
+                Err(e) => tracing::warn!("Failed to save first-launch setup: {e:#}"),
+            }
+        }
         onboarding_screen.mark_first_launch_done();
     }
 
     Ok(NoriOnboardingResult {
         directory_trust_decision: onboarding_screen.directory_trust_decision(),
         should_exit: onboarding_screen.should_exit(),
+        settings_saved,
     })
 }
 
@@ -365,7 +432,16 @@ mod tests {
     fn nori_step_implements_required_traits() {
         // This test verifies the NoriStep enum implements all required traits.
         // The compilation of this test is the actual verification.
-        let _welcome = NoriStep::Welcome(NoriWelcomeWidget::new());
+        let _setup = NoriStep::Setup(NoriSetupStep::new(
+            Vec::new(),
+            None,
+            Caption {
+                version: String::new(),
+                cwd: String::new(),
+            },
+            Tier::Ansi16,
+            false,
+        ));
     }
 
     #[test]

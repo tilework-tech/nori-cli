@@ -27,8 +27,27 @@ nori "summarize README"    # start with a prompt
 nori -C ../other-repo      # work in another folder
 ```
 
-The first launch shows a welcome screen. Nori then asks whether you trust the
-folder. Nori saves the answer per project in `config.toml`.
+The first launch shows the animated onigiri welcome above a short setup form;
+one Enter accepts it:
+
+- **Default agent** (required). Prefilled with the first agent Nori can see a
+  sign-in for; each agent shows "signed in", "not signed in", or "sign-in not
+  checked". Saved as `agent`.
+- **Permissions**, prefilled with Agent. Ask saves `approval_policy =
+  "untrusted"` and Approve all saves `"never"`; Agent saves nothing, so each
+  folder's trust decides.
+- **Usage stats**, prefilled with Share. Don't share sets `opt_out` in
+  `$NORI_HOME/.nori-install.json`. Only counts are sent; never prompts, code,
+  file paths or sessions.
+
+When the intro plays (terminals about 40 rows and taller), the form unrolls
+downwards once the ball lands (about 1.7 s in); in shorter terminals it shows at once. A key
+pressed before the form is fully drawn shows it at once and is otherwise
+ignored, so an early Enter never submits answers you have not seen.
+
+`↑`/`↓` move, `←`/`→` or `Space` change an answer, `q` quits. Nori then asks
+whether you trust the folder and saves the answer per project in
+`config.toml`.
 
 At startup the welcome card's title is Jiro's face, `〉_ ▐`, all in green. It
 blinks while the agent session starts, then winks and types the wordmark

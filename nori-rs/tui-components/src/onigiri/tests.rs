@@ -24,8 +24,14 @@ pub(super) fn caption() -> Caption {
 pub(super) fn frame(scene: &mut Onigiri, w: u16, h: u16, ms: u64) -> Buffer {
     let area = Rect::new(0, 0, w, h);
     let mut buf = Buffer::empty(area);
-    scene.render(Duration::from_millis(ms), area, &mut buf);
+    scene.render(real(ms as f32), area, &mut buf);
     buf
+}
+
+/// The wall-clock time at which the scene reaches `scene_ms` on its own
+/// timeline, so tests can name moments by the timeline's constants.
+pub(super) fn real(scene_ms: f32) -> Duration {
+    Duration::from_secs_f32(super::timeline::real_ms(scene_ms) / 1000.0)
 }
 
 pub(super) fn intro(tier: Tier, w: u16, h: u16, ms: u64) -> Buffer {
@@ -164,7 +170,8 @@ fn intro_draws_at_60fps_and_waits_for_the_light_without_an_intro() {
         scene.next_frame_in(at(500), small),
     ]
     .map(|d| d.map(|d| d.as_millis()));
-    assert_eq!(got, [Some(16), Some(16), Some(1950)]);
+    let wait = (real(super::timeline::LIGHT_AT) - at(500)).as_millis();
+    assert_eq!(got, [Some(16), Some(16), Some(wait)]);
 }
 
 #[test]
@@ -340,4 +347,34 @@ fn ball_hops_after_the_press_and_lands() {
     let at = |ms: f32| top_row(&intro(Tier::True, 100, 30, ms as u64));
     let (up, rest) = (at(HOP_AT + HOP / 2.0), at(3500.0));
     assert!(up < rest, "top row {up:?} mid-hop vs {rest:?} at rest");
+}
+
+#[test]
+fn intro_plays_faster_than_its_timeline_and_the_light_keeps_its_period() {
+    use super::timeline::LAND_AT;
+    use super::timeline::LIGHT_PERIOD;
+    use super::timeline::SETTLED_AT;
+    use super::timeline::SPEED;
+    let ms = |d: Duration| d.as_secs_f32() * 1000.0;
+    assert!((ms(real(LAND_AT)) - LAND_AT / SPEED).abs() < 1.0);
+    let turn = ms(real(SETTLED_AT + 2.0 * LIGHT_PERIOD)) - ms(real(SETTLED_AT + LIGHT_PERIOD));
+    assert!(
+        (turn - LIGHT_PERIOD).abs() < 1.0,
+        "one light turn took {turn} ms"
+    );
+}
+
+#[test]
+fn landing_time_is_reported_only_when_the_intro_plays() {
+    use super::timeline::LAND_AT;
+    let animated = Onigiri::new(Tier::True, caption());
+    let settled = Onigiri::new(Tier::True, caption()).settled();
+    assert_eq!(
+        [
+            animated.landed_at(Rect::new(0, 0, 100, 30)),
+            animated.landed_at(Rect::new(0, 0, 40, 16)),
+            settled.landed_at(Rect::new(0, 0, 100, 30)),
+        ],
+        [Some(real(LAND_AT)), None, None]
+    );
 }

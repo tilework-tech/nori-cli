@@ -61,10 +61,13 @@ use layout::TEXTURE_ROWS;
 pub use layout::layout;
 use lighting::Light;
 use timeline::INTRO_FRAME;
+use timeline::LAND_AT;
 use timeline::LIGHT_AT;
 use timeline::LIGHT_TICK;
 use timeline::SETTLED_AT;
 use timeline::TICK_SLACK;
+use timeline::real_ms;
+use timeline::scene_ms;
 use word::Word;
 
 /// Placeholder status text drawn next to the wordmark.
@@ -162,9 +165,11 @@ impl Onigiri {
             Layout::Side { rows } | Layout::Stack { rows } => rows,
             Layout::Line => return None,
         };
-        let t = elapsed.as_secs_f32() * 1000.0;
-        let until =
-            |at: f32| Some(Duration::from_secs_f32((at - t).max(0.0) / 1000.0) + TICK_SLACK);
+        let now = elapsed.as_secs_f32() * 1000.0;
+        let t = scene_ms(now);
+        let until = |at: f32| {
+            Some(Duration::from_secs_f32((real_ms(at) - now).max(0.0) / 1000.0) + TICK_SLACK)
+        };
         if !self.intro || rows < TEXTURE_ROWS {
             None
         } else if rows >= INTRO_ROWS && t < SETTLED_AT {
@@ -176,6 +181,16 @@ impl Onigiri {
         }
     }
 
+    /// When the ball and the i dot land, if the intro plays in `area`.
+    pub fn landed_at(&self, area: Rect) -> Option<Duration> {
+        let rows = match layout(area.width, area.height) {
+            Layout::Side { rows } | Layout::Stack { rows } => rows,
+            Layout::Line => return None,
+        };
+        (self.intro && rows >= INTRO_ROWS)
+            .then(|| Duration::from_secs_f32(real_ms(LAND_AT) / 1000.0))
+    }
+
     pub fn render(&mut self, elapsed: Duration, area: Rect, buf: &mut Buffer) {
         if self.scene.as_ref().is_none_or(|(a, _)| *a != area) {
             self.scene = Some((area, Scene::new(area, self.intro)));
@@ -183,7 +198,7 @@ impl Onigiri {
         let Some((_, scene)) = self.scene.as_mut() else {
             return;
         };
-        let t = elapsed.as_secs_f32() * 1000.0;
+        let t = scene_ms(elapsed.as_secs_f32() * 1000.0);
         let settled = !self.intro;
         let dim = Style::default().add_modifier(Modifier::DIM);
         let bold = Style::default().add_modifier(Modifier::BOLD);
