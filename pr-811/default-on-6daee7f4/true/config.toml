@@ -1,0 +1,5 @@
+agent = "mock-model"
+[projects."/home/sprite/org/workspace/.worktrees/ps-proof/out/true/home/project"]
+trust_level = "trusted"
+[tui]
+program_status = true

@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:cargo test --offline
+
+
+• The tide table lists four high tides.
+
+• Permission: Allow Execute shell command
+
+• Permission granted with option: allow
+
+
+〉
+
+  / commands · ! shell · controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach  ⎇ main

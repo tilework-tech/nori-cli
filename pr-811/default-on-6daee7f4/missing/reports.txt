@@ -1,0 +1,7 @@
+ESC]7501;state=idle:app=noriESC\
+ESC]7501;state=working:app=noriESC\
+ESC]7501;state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVkESC\   # msg = "Approval needed"
+ESC]7501;state=working:app=noriESC\
+ESC]7501;state=done:app=noriESC\
+ESC]7501;state=clearESC\
+-- 6 OSC 7501 records, 18817 bytes total

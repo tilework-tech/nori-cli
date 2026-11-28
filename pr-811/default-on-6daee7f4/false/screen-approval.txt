@@ -1,0 +1,30 @@
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/ps-proof/out/false/home/project
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:cargo test --offline
+
+
+• The tide table lists four high tides.
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: cargo test --offline
+  cargo test --offline
+
+  ▏› 1. Allow (y)                                                                                          ▕
+     2. Reject (esc)
+
+  Press enter to confirm or esc to reject
