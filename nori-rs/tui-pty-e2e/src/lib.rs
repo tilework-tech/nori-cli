@@ -24,9 +24,9 @@ use portable_pty::PtySize;
 use portable_pty::native_pty_system;
 use std::collections::HashMap;
 use std::io::IsTerminal;
-use std::io::Read;
 use std::io::Write;
 use std::sync::LazyLock;
+use std::sync::PoisonError;
 use std::time::Duration;
 use std::time::Instant;
 use terminal_queries::TerminalQueries;
@@ -98,23 +98,10 @@ fn indent_lines(text: &str, indent: &str) -> String {
         .join("\n")
 }
 
-#[cfg(unix)]
-/// Helper to set a file descriptor to non-blocking mode
-fn set_nonblocking(fd: std::os::unix::io::RawFd) -> Result<()> {
-    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-    if flags < 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    let result = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
-    if result < 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    Ok(())
-}
-
 pub use keys::Key;
 mod input;
 mod keys;
+mod pty_reader;
 mod readiness;
 mod settling;
 pub use readiness::has_composer_row;
@@ -123,14 +110,13 @@ mod terminal_queries;
 /// PTY session for driving the codex TUI
 pub struct TuiSession {
     _master: Box<dyn portable_pty::MasterPty + Send>,
-    reader: Box<dyn Read + Send>,
-    writer: Box<dyn Write + Send>,
+    output: pty_reader::PtyOutput,
+    writer: pty_reader::SharedWriter,
     emulator: Emulator,
     /// Every byte read from the PTY, including terminal queries.
     raw_output: Vec<u8>,
     spawned_at: Instant,
     first_output_after: Option<Duration>,
-    terminal_queries: TerminalQueries,
     child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
     nori_home: Option<std::path::PathBuf>,
@@ -440,27 +426,22 @@ trust_level = "trusted"
         let spawned_at = Instant::now();
         let child = pair.slave.spawn_command(cmd)?;
 
-        // Set master PTY to non-blocking mode before cloning reader
-        // This ensures the cloned reader FD inherits the non-blocking flag
-        #[cfg(unix)]
-        {
-            if let Some(master_fd) = pair.master.as_raw_fd() {
-                set_nonblocking(master_fd)?;
-            }
-        }
-
-        let reader = pair.master.try_clone_reader()?;
-        let writer = pair.master.take_writer()?;
+        let writer: pty_reader::SharedWriter =
+            std::sync::Arc::new(std::sync::Mutex::new(pair.master.take_writer()?));
+        let output = pty_reader::PtyOutput::spawn(
+            pair.master.try_clone_reader()?,
+            writer.clone(),
+            TerminalQueries::new(config.withhold_palette_replies),
+        );
 
         Ok(Self {
             _master: pair.master,
-            reader,
+            output,
             writer,
             emulator: Emulator::new(rows, cols),
             raw_output: Vec::new(),
             spawned_at,
             first_output_after: None,
-            terminal_queries: TerminalQueries::default(),
             child,
             nori_home: config
                 .nori_home
@@ -501,94 +482,30 @@ trust_level = "trusted"
         self.wait_for_process_exit(timeout)
     }
 
-    /// Leave OSC color queries unanswered until the test sends its own terminal replies.
-    pub fn withhold_palette_replies(&mut self) {
-        self.terminal_queries.withhold_palette = true;
-    }
-
-    /// Read any available output and update screen state
+    /// Apply the output read since the last poll to the screen.
     ///
-    /// This method attempts to read available data without blocking.
-    /// It uses a simple approach of reading with a small buffer which works
-    /// well for our polling-based test framework.
+    /// Never waits: the PTY is read continuously in the background (see
+    /// [`pty_reader`]), so this only hands over what has already arrived.
+    /// Fails once the output has ended with a read error, as it does on Linux
+    /// after the child exits.
     pub fn poll(&mut self) -> Result<()> {
-        // Create a small buffer for reading
-        let mut buf = [0u8; 8192];
-
-        let debug = debug_enabled();
-        let s = styles();
-
-        if debug {
-            eprintln!(
-                "    {} About to call read()...",
-                "[DEBUG poll]".style(s.blue)
-            );
-        }
-        let read_start = Instant::now();
-
-        // The PTY reader is in non-blocking mode and will return immediately if no data is available
-        // We rely on the polling loop in wait_for() to handle timing
-        let read_result = self.reader.read(&mut buf);
+        let taken = self.output.take();
         self.emulator.release_stale_frame();
-        let read_duration = read_start.elapsed();
-
-        if debug {
+        let bytes = taken?;
+        if debug_enabled() {
             eprintln!(
-                "    {} read() returned after {:?}",
-                "[DEBUG poll]".style(s.blue),
-                read_duration
+                "    {} {} bytes",
+                "[DEBUG poll]".style(styles().blue),
+                bytes.len()
             );
         }
-
-        match read_result {
-            Ok(0) => {
-                if debug {
-                    eprintln!(
-                        "    {} read() returned {} - EOF/process exited",
-                        "[DEBUG poll]".style(s.blue),
-                        "Ok(0)".style(s.yellow)
-                    );
-                }
-                Ok(())
-            }
-            Ok(n) => {
-                if debug {
-                    eprintln!(
-                        "    {} read() returned {} - {} bytes read",
-                        "[DEBUG poll]".style(s.blue),
-                        format!("Ok({n})").style(s.green),
-                        n
-                    );
-                }
-                let bytes = &buf[..n];
-                self.first_output_after
-                    .get_or_insert_with(|| self.spawned_at.elapsed());
-                self.raw_output.extend_from_slice(bytes);
-                self.terminal_queries.respond(bytes, &mut self.writer)?;
-                self.emulator.process(bytes);
-                Ok(())
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                if debug {
-                    eprintln!(
-                        "    {} read() returned {} - no data available",
-                        "[DEBUG poll]".style(s.blue),
-                        "WouldBlock".style(s.dim)
-                    );
-                }
-                Ok(())
-            }
-            Err(e) => {
-                if debug {
-                    eprintln!(
-                        "    {} read() returned {}",
-                        "[DEBUG poll]".style(s.blue),
-                        format!("Err: {e}").style(s.red)
-                    );
-                }
-                Err(e.into())
-            }
+        if !bytes.is_empty() {
+            self.first_output_after
+                .get_or_insert_with(|| self.spawned_at.elapsed());
+            self.raw_output.extend_from_slice(&bytes);
+            self.emulator.process(&bytes);
         }
+        Ok(())
     }
 
     /// The whole terminal history: every scrollback line, oldest first,
@@ -752,8 +669,9 @@ trust_level = "trusted"
 
     /// Type a string
     pub fn send_str(&mut self, s: &str) -> std::io::Result<()> {
-        self.writer.write_all(s.as_bytes())?;
-        self.writer.flush()
+        let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
+        writer.write_all(s.as_bytes())?;
+        writer.flush()
     }
 
     /// Send a key event.
@@ -767,8 +685,11 @@ trust_level = "trusted"
     /// as Alt+`/` and lose the Escape. The gap is a backstop only: a busy TUI
     /// may not read within it, so tests still wait for the Escape's effect.
     pub fn send_key(&mut self, key: Key) -> std::io::Result<()> {
-        self.writer.write_all(&key.to_escape_sequence())?;
-        self.writer.flush()?;
+        {
+            let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
+            writer.write_all(&key.to_escape_sequence())?;
+            writer.flush()?;
+        }
         if matches!(key, Key::Escape) {
             self.settle(ESCAPE_GAP);
         }
@@ -858,6 +779,9 @@ pub struct SessionConfig {
     /// Binary names to exclude from PATH (filters out directories containing these binaries).
     /// Useful for testing behavior when certain commands are "not installed".
     pub exclude_binaries: Vec<String>,
+    /// Leave OSC color queries unanswered, so the test can send its own
+    /// terminal replies.
+    pub withhold_palette_replies: bool,
 }
 
 impl Default for SessionConfig {
@@ -888,6 +812,7 @@ impl SessionConfig {
             // Exclude installers by default since it won't be in PATH on CI runners.
             // Tests that need installers should explicitly add it via with_extra_path().
             exclude_binaries: vec!["nori-ai".to_string(), "nori-skillsets".to_string()],
+            withhold_palette_replies: false,
         }
     }
 
