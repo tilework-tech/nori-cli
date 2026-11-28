@@ -256,6 +256,7 @@ folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
 | PgUp, Ctrl+T | Open the transcript (PgUp: in the full-screen view, a page above the screen); Esc or q closes it. |
 | `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. A host that lists paths resolves the folder and completes it on Tab. The new session comes on screen once the host lists it. |
 | `/agent`, `/agents` | Pick one of the agents the host lists, each checked on the host's machine: a `--host` terminal sees the host's agents, not its own. With no session on screen, the host starts a session with it. A session with no prompts yet changes agent in place and keeps its ID. A prompted session keeps running and the agent starts in a new session beside it, in the same folder. A row the host cannot start shows the host's reason, and Enter keeps the picker open. Saved sessions are not offered. |
+| `/model`, `/config` | As the controller, change the model or ACP options the session on screen advertised. Only advertised values are offered (no custom model), and `/config` leaves out the agent (`/agent`) and permission mode (`/approvals`). The choice goes to the host, and the screen changes only when the host answers. Nothing is saved to `[default_models]`. |
 | `/delegate <agent> <task>` | Delegate a task from the session on screen. |
 | `/close` | Close the session on screen. |
 | `/approvals ask\|agent\|approve-all` | Set the permission mode of the session on screen. `approve-all` asks first. An unknown mode keeps the typed command. |
@@ -352,8 +353,8 @@ Columns:
 | Command | During a turn | Scope | What it does |
 |---|---|---|---|
 | `/agent` | beside | all | Pick an agent and start a session with it. Saves the choice as `agent`. In the picker, Shift+Tab turns ACP wire recording on or off. `/agents` is an alias; the menu lists `/agent` once. |
-| `/model` | no | all | Pick the agent's model, or enter a custom one. Saves it in `[default_models]`. |
-| `/config` | no | all | Change the agent's own ACP session options. Only model choices are saved. |
+| `/model` | no | all | Pick the agent's model, or enter a custom one. Saves it in `[default_models]`. In `nori attach`, see [Attach keys and commands](#attach-keys-and-commands). |
+| `/config` | no | all | Change the agent's own ACP session options. Only model choices are saved. In `nori attach`, see [Attach keys and commands](#attach-keys-and-commands). |
 | `/approvals` | no | all | Choose what Nori can do without approval, for this session. See [permissions.md](permissions.md). |
 | `/settings` | no | all | Open the Nori settings, including hotkeys and footer segments. |
 | `/vim` | no | all | Choose Vim mode and what Enter does. |

@@ -123,6 +123,15 @@ pub(crate) enum AppEvent {
         name: String,
     },
 
+    /// A joined host's answer to setting one of a session's options.
+    HostSessionConfigSet {
+        session_id: nori_harness::ConversationId,
+        config_id: String,
+        option_name: String,
+        value_name: String,
+        result: Result<Vec<nori_protocol::acp::v1::SessionConfigOption>, String>,
+    },
+
     /// A joined host refused to change this session's agent.
     HostAgentNotReplaced {
         session_id: nori_harness::ConversationId,

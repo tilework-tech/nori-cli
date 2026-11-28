@@ -48,7 +48,11 @@ impl ReplyPreview {
             },
             // A request, or its answer when the request itself was seen
             // elsewhere, also ends the reply.
-            SessionEvent::Acp(AcpEvent::Request { .. } | AcpEvent::Response { .. })
+            SessionEvent::Acp(
+                AcpEvent::Request { .. }
+                | AcpEvent::Response { .. }
+                | AcpEvent::ConfigSnapshot { .. },
+            )
             | SessionEvent::Nori(NoriEvent::RequestResolved(_))
             | SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
                 SessionPhase::Prompting { .. } | SessionPhase::Loading { .. },

@@ -292,6 +292,7 @@ impl HostLink {
                 self.connection.features.shell = sessions["shell"] == true;
                 let agents = crate::host_client::agents::host_agents(&result);
                 self.connection.features.agents = agents.is_some();
+                self.connection.features.session_config = agents.is_some();
                 self.connection.agents = agents.unwrap_or_default();
                 // List at once rather than at the next heartbeat, so the
                 // picker opens as soon as the host lets this terminal in.

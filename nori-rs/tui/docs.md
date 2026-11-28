@@ -116,7 +116,7 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   In-process commands the host serves a method for run joined once the host
   advertises it (`command_availability::served_by_host`): `/goal` with
   `goal`, `/context` with `context`, `/compact` with `compact`, `/agent` with
-  `agents`. Older hosts keep the refusal. Joined `/agent` (`chatwidget/host_agents.rs`)
+  `agents`, `/model` and `/config` with `session_config`. Older hosts keep the refusal. Joined `/agent` (`chatwidget/host_agents.rs`)
   lists `HostConnection.agents`, read from the host's `initialize`
   `nori/preparedAgent` `agentOption` (`host_client/agents.rs`); a row whose
   description is not "Installed" cannot start. It starts a session with the
@@ -125,6 +125,21 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   and ignores the old agent's `Shutdown` it asked for (`AgentChange`).
   `slash_command::builtin_named` resolves aliases such as `/agents`; the
   command popup matches them but lists the builtin once.
+  Joined `/model` and `/config` (`chatwidget/host_config.rs`) open from the
+  widget's tracked `agent_config`, leave out the host-owned `agent` (category
+  `_nori_agent`) and permission-mode options, and offer no curated or custom
+  models. A choice is `HostCall::SetConfigOption`; only the host's answer
+  (`AppEvent::HostSessionConfigSet`, routed to the widget of the session it
+  was made in) merges the reported options over the last ones, keeping adapter
+  mode options the host omits. Joined widgets also silently adopt journaled
+  set answers, load/resume answers that report options (even empty), and
+  `ConfigSnapshot`s as they are, replacing the options, so watchers and late
+  joiners see the agent's own mode changes and removals. After an in-place
+  agent change, the new agent's `SessionStarted` sets the options, in
+  whichever order it and the host's receipt arrive; the receipt, which
+  leaves out the agent's own mode, only names the new agent. A joined
+  `SessionStarted` with no options clears the previous agent's. Nothing is written to
+  `[default_models]`.
   A refused builtin command stays in the composer as `/command`; a command
   the composer does not know goes to the agent as a prompt. With no session
   on screen, `@` asks a joined host that serves `find_paths` to search its own

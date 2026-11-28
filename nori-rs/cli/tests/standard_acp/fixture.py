@@ -20,9 +20,16 @@ leases = []
 sessions = set()
 mode_file = Path("fixture-modes")
 mode_ids = mode_file.read_text().split() if mode_file.exists() else ["explore"]
+# One agent can start in its own modes, the first of them current.
+if Path(f"fixture-modes-{name}").exists():
+    mode_ids = Path(f"fixture-modes-{name}").read_text().split()
 modes = {}
 models = {}
 config_only = Path("fixture-config-options-only").exists()
+# With config options only, also offer an effort option and name the model and
+# effort in each `whoami` answer.
+reports_settings = Path("fixture-settings-report").exists()
+efforts = {}
 saved = {"sessionId": "saved-1", "cwd": sys.argv[2] if len(sys.argv) > 2 else os.getcwd()}
 
 
@@ -39,12 +46,14 @@ def update(sid, kind, text, meta=None):
 
 
 def session_options(sid):
+    settings = [("mode", "permission", modes[sid], mode_ids),
+                ("model", "model", models[sid], ["initial", name])]
+    if reports_settings:
+        settings.append(("thought_level", "effort", efforts[sid], ["low", "high"]))
     return [{"type": "select", "category": category, "id": key, "name": key.title(),
              "currentValue": current,
              "options": [{"value": v, "name": v.title()} for v in allowed]}
-            for category, key, current, allowed in [
-                ("mode", "permission", modes[sid], mode_ids),
-                ("model", "model", models[sid], ["initial", name])]]
+            for category, key, current, allowed in settings]
 
 
 def options(value="slow"):
@@ -107,6 +116,10 @@ for line in sys.stdin:
         sessions.add(sid)
         modes[sid] = mode_ids[0]
         models[sid] = "initial" if config_only else name
+        efforts[sid] = "low"
+        if Path(f"fixture-no-options-{name}").exists():
+            send(id=rid, result={"sessionId": sid})
+            continue
         if config_only:
             send(id=rid, result={"sessionId": sid, "configOptions": session_options(sid)})
             continue
@@ -206,7 +219,8 @@ for line in sys.stdin:
             continue
         if any(block.get("text") == "whoami" for block in params["prompt"]):
             answers += 1
-            update(sid, "agent_message_chunk", f"{name} is answering ({answers}).")
+            report = f" with model {models[sid]}, effort {efforts[sid]}" if reports_settings else ""
+            update(sid, "agent_message_chunk", f"{name} is answering ({answers}){report}.")
             send(id=rid, result={"stopReason": "end_turn"})
             continue
         perm = 40 if text == "reuse permission id" else next(permissions)
@@ -235,6 +249,8 @@ for line in sys.stdin:
                 modes[sid] = value
             elif key == "model" and value in ("initial", name):
                 models[sid] = value
+            elif reports_settings and key == "effort" and value in ("low", "high"):
+                efforts[sid] = value
             else:
                 send(id=rid, error={"code": -32602, "message": "unsupported setting"})
                 continue

@@ -128,7 +128,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.9.0";
+pub const HOST_CONTRACT: &str = "1.10.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.

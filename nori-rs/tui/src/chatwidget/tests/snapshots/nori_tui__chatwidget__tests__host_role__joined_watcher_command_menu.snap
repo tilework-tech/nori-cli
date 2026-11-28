@@ -5,8 +5,8 @@ expression: menu
 /
 
   /agent            not available on this host yet
-  /model            not available in nori attach yet
-  /config           not available in nori attach yet
+  /model            not available on this host yet
+  /config           not available on this host yet
   /approvals        watching · Alt+T to take control
   /settings         configure Nori CLI settings (theme, hotkeys, layout, …)
   /vim              configure Vim mode and Enter key behavior

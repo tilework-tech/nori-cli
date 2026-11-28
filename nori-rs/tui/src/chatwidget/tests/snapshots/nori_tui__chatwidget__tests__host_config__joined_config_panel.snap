@@ -1,0 +1,11 @@
+---
+source: tui/src/chatwidget/tests/host_config.rs
+expression: render_bottom_pane(&chat)
+---
+  Session config
+  Select an ACP session setting to change
+
+  ▏› 1. Model (synthetic-steady)                                             ▕
+     2. Effort (low)
+
+  ↑↓/j/k move  enter select  esc close

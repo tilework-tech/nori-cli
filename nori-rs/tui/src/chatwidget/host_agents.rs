@@ -17,8 +17,7 @@ use crate::history_cell;
 use crate::host_client::HostCall;
 use crate::host_client::agents::HostAgent;
 
-/// The option the host owns for a session's agent.
-const AGENT_OPTION: &str = "agent";
+use super::host_config::AGENT_OPTION;
 
 /// An in-place agent change this terminal asked for.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -158,7 +157,10 @@ impl ChatWidget {
         }
     }
 
-    /// The host changed this session's agent in place.
+    /// The host changed this session's agent in place. Its answer names
+    /// the agent but leaves out the agent's own mode, so the new agent's
+    /// startup in the journal, which may arrive before or after it, sets the
+    /// session's options.
     pub(crate) fn on_host_agent_replaced(&mut self, slug: String, name: String) {
         self.agent_change = AgentChange::None;
         self.config.active_agent.clone_from(&slug);
