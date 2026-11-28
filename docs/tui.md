@@ -41,7 +41,7 @@ one Enter accepts it:
   file paths or sessions.
 
 When the intro plays (terminals about 40 rows and taller), the form unrolls
-downwards once the entrance ends (the band has wrapped, about 2.5 s in); in shorter terminals it shows at once. A key
+downwards once the ball lands (about 1.7 s in); in shorter terminals it shows at once. A key
 pressed before the form is fully drawn shows it at once and is otherwise
 ignored, so an early Enter never submits answers you have not seen.
 

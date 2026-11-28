@@ -22,8 +22,8 @@ real time. After that the scene runs in real time, so the light keeps its 6 s tu
 | 610–1360 | As the pens finish, grains (Braille dots) fly into frame, overshoot their spot by about 12% and spring back. |
 | 1360–1450 | Press: the solid ball grows from the centre and squashes 10%. |
 | 1450–1680 | Hop: the ball springs up stretched and falls back; the green i dot falls at the same time. |
-| 1680 | Ball and dot land on the same frame: the ball squashes and wobbles out over 0.45 s, the dot squashes, bounces and ripples down the stem. |
-| 2130–2460 | The nori band wraps up from the base, one row at a time. In the TUI the setup form then unrolls downwards (about 0.4 s). |
+| 1680 | Ball and dot land on the same frame: the ball squashes and wobbles out over 0.45 s, the dot squashes, bounces and ripples down the stem. In the TUI the setup form unrolls downwards from here (about 0.4 s). |
+| 2130–2460 | The nori band wraps up from the base, one row at a time. |
 | 2130→ | The light eases up to speed over about 1 s, then turns once every 6 s. |
 | 3010→ | A shimmer runs across the wordmark and back once per turn of the light. |
 

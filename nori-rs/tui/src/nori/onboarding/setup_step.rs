@@ -1,7 +1,6 @@
 //! The first-launch screen: the onigiri welcome above the setup form.
 //!
-//! When the welcome's intro plays, the form unrolls once the entrance ends
-//! (the band has wrapped):
+//! When the welcome's intro plays, the form unrolls once the ball lands:
 //! rows appear top-down, dim at first, then fully drawn. A key pressed
 //! before the form is fully drawn reveals it at once and is not applied.
 
@@ -143,7 +142,7 @@ impl NoriSetupStep {
         let (welcome_area, form_area) = self.split(area);
         let mut welcome = self.welcome.borrow_mut();
         if !self.skipped {
-            self.fade_at.set(welcome.entrance_done_at(welcome_area));
+            self.fade_at.set(welcome.landed_at(welcome_area));
         }
         welcome.render(elapsed, welcome_area, buf);
         if self.fully_shown(elapsed) {
@@ -233,9 +232,9 @@ mod tests {
         )
     }
 
-    fn entrance_done() -> Duration {
+    fn landed() -> Duration {
         Onigiri::new(Tier::True, caption())
-            .entrance_done_at(super::split_for(TALL, step(true).form.height()).0)
+            .landed_at(super::split_for(TALL, step(true).form.height()).0)
             .expect("the intro plays at 110x44")
     }
 
@@ -272,27 +271,27 @@ mod tests {
     }
 
     #[test]
-    fn form_stays_hidden_until_the_entrance_ends() {
+    fn form_stays_hidden_until_the_ball_lands() {
         let s = step(true);
-        let before = form_rows(&s, TALL, entrance_done() - Duration::from_millis(1));
+        let before = form_rows(&s, TALL, landed() - Duration::from_millis(1));
         assert!(before.iter().all(|r| *r == ' '), "{before:?}");
     }
 
     #[test]
-    fn form_unrolls_downwards_after_the_entrance() {
+    fn form_unrolls_downwards_after_the_landing() {
         let s = step(true);
-        let early = form_rows(&s, TALL, entrance_done() + Duration::from_millis(40));
+        let early = form_rows(&s, TALL, landed() + Duration::from_millis(40));
         let first = early.iter().position(|r| *r != ' ').expect("a row shows");
         let last = early.iter().rposition(|r| *r != ' ').expect("a row shows");
         assert_eq!(early[first], 'd', "{early:?}");
         assert!(
-            form_rows(&s, TALL, entrance_done() + Duration::from_secs(5))[last + 1..]
+            form_rows(&s, TALL, landed() + Duration::from_secs(5))[last + 1..]
                 .iter()
                 .any(|r| *r != ' '),
             "lower rows are still hidden early on: {early:?}"
         );
         assert!(is(
-            &form_rows(&s, TALL, entrance_done() + Duration::from_secs(2)),
+            &form_rows(&s, TALL, landed() + Duration::from_secs(2)),
             'x'
         ));
     }
@@ -319,8 +318,8 @@ mod tests {
     fn frames_keep_coming_until_the_fade_ends_then_follow_the_welcome() {
         let s = step(true);
         let _ = form_rows(&s, TALL, Duration::ZERO);
-        let during = entrance_done() + Duration::from_millis(100);
-        let after = entrance_done() + Duration::from_millis(5010);
+        let during = landed() + Duration::from_millis(100);
+        let after = landed() + Duration::from_millis(5010);
         let welcome = Onigiri::new(Tier::True, caption());
         assert_eq!(
             [

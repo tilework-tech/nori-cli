@@ -61,10 +61,9 @@ use layout::TEXTURE_ROWS;
 pub use layout::layout;
 use lighting::Light;
 use timeline::INTRO_FRAME;
+use timeline::LAND_AT;
 use timeline::LIGHT_AT;
 use timeline::LIGHT_TICK;
-use timeline::NORI_AT;
-use timeline::NORI_DUR;
 use timeline::SETTLED_AT;
 use timeline::TICK_SLACK;
 use timeline::real_ms;
@@ -182,15 +181,14 @@ impl Onigiri {
         }
     }
 
-    /// When the entrance ends (the band has wrapped), if the intro plays in
-    /// `area`.
-    pub fn entrance_done_at(&self, area: Rect) -> Option<Duration> {
+    /// When the ball and the i dot land, if the intro plays in `area`.
+    pub fn landed_at(&self, area: Rect) -> Option<Duration> {
         let rows = match layout(area.width, area.height) {
             Layout::Side { rows } | Layout::Stack { rows } => rows,
             Layout::Line => return None,
         };
         (self.intro && rows >= INTRO_ROWS)
-            .then(|| Duration::from_secs_f32(real_ms(NORI_AT + NORI_DUR) / 1000.0))
+            .then(|| Duration::from_secs_f32(real_ms(LAND_AT) / 1000.0))
     }
 
     pub fn render(&mut self, elapsed: Duration, area: Rect, buf: &mut Buffer) {
