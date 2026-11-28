@@ -98,6 +98,9 @@ fn layout_follows_the_terminal_shape() {
         (40, 16),
         (30, 10),
         (24, 6),
+        (60, 6),
+        (80, 3),
+        (80, 2),
         (20, 4),
     ]
     .into_iter()
@@ -113,6 +116,9 @@ fn layout_follows_the_terminal_shape() {
             (40, 16, Layout::Stack { rows: 10.0 }),
             (30, 10, Layout::Stack { rows: 5.0 }),
             (24, 6, Layout::Line),
+            (60, 6, Layout::Mini),
+            (80, 3, Layout::Mini),
+            (80, 2, Layout::Line),
             (20, 4, Layout::Line),
         ]
     );
@@ -377,4 +383,23 @@ fn landing_time_is_reported_only_when_the_intro_plays() {
         ],
         [Some(real(LAND_AT)), None, None]
     );
+}
+
+#[test]
+fn mini_ball_in_each_tier() {
+    for (tier, name) in [
+        (Tier::True, "true"),
+        (Tier::X256, "256"),
+        (Tier::Ansi16, "ansi16"),
+    ] {
+        assert_snapshot!(format!("mini_{name}_60x5"), dump(&still(tier, 60, 5)));
+    }
+}
+
+#[test]
+fn intro_fits_only_where_the_full_intro_plays() {
+    use super::intro_fits;
+    let got =
+        [(100, 30), (60, 20), (40, 16), (60, 6)].map(|(w, h)| intro_fits(Rect::new(0, 0, w, h)));
+    assert_eq!(got, [true, false, false, false]);
 }

@@ -66,7 +66,8 @@ The ball size comes from the terminal size (`layout()` in
 | ≥ 11 rows (about 70x18 and up) | Full intro with particles, then the light loop. |
 | 7–10 rows | Settled ball with grain texture and the light loop. No intro. |
 | 4–6 rows | Settled ball with smooth shading only. |
-| < 4 rows | One-line `nori cli v…` header. |
+| < 4 rows, area ≥ 30x3 | Hand-pixelled mini onigiri (8x3 cells, `mini.rs`) beside a text wordmark. |
+| smaller | One-line `nori cli v…` header. |
 
 The ball sits beside the block wordmark by default. It moves above a one-line
 text wordmark only when stacking gives a much bigger ball (`img/sizes.png`).

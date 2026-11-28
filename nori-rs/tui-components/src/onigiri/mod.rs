@@ -4,8 +4,9 @@
 //! rows tall) the full welcome plays: grains spring together, get
 //! pressed, the ball hops and lands with a wobble, the nori band wraps, then a light circles the rice. Smaller areas
 //! get the settled ball, and the light keeps circling while the ball is big
-//! enough to carry grain texture. Areas too small for a ball get a one-line
-//! text wordmark. Beside the ball, the `nori` wordmark is drawn in rounded
+//! enough to carry grain texture. Areas too small for a drawn ball get a
+//! hand-pixelled mini onigiri beside a text wordmark (`mini`), and the
+//! smallest get a one-line text wordmark. Beside the ball, the `nori` wordmark is drawn in rounded
 //! box-drawing lines: a pen writes it, each letter ignites like neon, the i
 //! dot drops in, and a shimmer then follows the light (see `word`). Colour
 //! adapts to truecolor, 256 and ANSI 16 ([`Tier::detect`]).
@@ -33,6 +34,7 @@ mod geometry;
 mod grains;
 mod layout;
 mod lighting;
+mod mini;
 mod shape;
 mod timeline;
 mod word;
@@ -92,6 +94,10 @@ enum Scene {
         cx: f32,
         base: f32,
     },
+    Mini {
+        x: i32,
+        y: i32,
+    },
     Line,
 }
 
@@ -129,6 +135,10 @@ impl Scene {
                     base: place.base(),
                 }
             }
+            Layout::Mini => Scene::Mini {
+                x: i32::from(area.x) + 2,
+                y: i32::from(area.y) + (i32::from(area.height) - mini::HEIGHT) / 2,
+            },
             Layout::Line => Scene::Line,
         }
     }
@@ -163,7 +173,7 @@ impl Onigiri {
     pub fn next_frame_in(&self, elapsed: Duration, area: Rect) -> Option<Duration> {
         let rows = match layout(area.width, area.height) {
             Layout::Side { rows } | Layout::Stack { rows } => rows,
-            Layout::Line => return None,
+            Layout::Mini | Layout::Line => return None,
         };
         let now = elapsed.as_secs_f32() * 1000.0;
         let t = scene_ms(now);
@@ -185,7 +195,7 @@ impl Onigiri {
     pub fn landed_at(&self, area: Rect) -> Option<Duration> {
         let rows = match layout(area.width, area.height) {
             Layout::Side { rows } | Layout::Stack { rows } => rows,
-            Layout::Line => return None,
+            Layout::Mini | Layout::Line => return None,
         };
         (self.intro && rows >= INTRO_ROWS)
             .then(|| Duration::from_secs_f32(real_ms(LAND_AT) / 1000.0))
@@ -260,6 +270,19 @@ impl Onigiri {
                     p.put(x + 9, y, &caption.version, dim);
                 }
             }
+            Scene::Mini { x, y } => {
+                mini::draw(&mut p, *x, *y);
+                let (x, y) = (*x + mini::WIDTH + 2, *y + 1);
+                text_wordmark(&mut p, x, y, true);
+                p.put(x + 5, y, "cli", Style::default());
+                p.put(x + 9, y, &caption.version, dim);
+                p.put(
+                    x + 11 + caption.version.chars().count() as i32,
+                    y,
+                    &caption.cwd,
+                    dim,
+                );
+            }
             Scene::Line => {
                 let y = i32::from(area.y + area.height / 2);
                 let x = i32::from(area.x) + 1;
@@ -268,6 +291,15 @@ impl Onigiri {
                 p.put(x + 9, y, &caption.version, dim);
             }
         }
+    }
+}
+
+/// Whether the full intro plays in `area`. Callers use it to leave the
+/// welcome enough room.
+pub fn intro_fits(area: Rect) -> bool {
+    match layout(area.width, area.height) {
+        Layout::Side { rows } | Layout::Stack { rows } => rows >= INTRO_ROWS,
+        Layout::Mini | Layout::Line => false,
     }
 }
 

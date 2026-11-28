@@ -1,0 +1,31 @@
+---
+source: tui/src/nori/onboarding/setup_step.rs
+expression: "screen(&s, w, h)"
+---
+                                   ▄▟⠀⠀⠃⠀▄▖
+                                 ▄⠀⠀⢳⣌⡄⠀⠀⠈⡄▙▖
+                               ▗▟⠀⠀⢀⢋⡌⠀⢀⢀⠀⠀⢀⡄▄
+                              ▄⠀⠀⣄⢻⡼⢈⡇⣌⡼⢈⠀⢃⠋⠰⠈⠀▖
+                            ▗▟⠀⠀⡼⣿⠈⡷⢸⢰⡌⡄⠈⠰⢋⠃⠀⠰⠀⠰▙
+                           ▗⠀⠀⠀⢻⠳⠻⢰⡄⠈⠀⠀⠀⡄⠃⢈⣄⠀⠀⡄⠀⠰▙▖
+                          ▟⠀⠀⠀⣿⢸⢃⣇⢈⠀⢃⠀⢀⠀⠃⡄⠻⠈⠰⡄⠳⠳⠀⠀⠰▖
+                         ▟⠀⠀⠳⠻⣼⡿⢈⢃⠀⠀⡼⠀⠸⠃⠀⠀⠀⠰⠀⢀⠃⠀⠀⠰⢳⠀▖
+                        ▟⠀⠀⣄⠋⠰⡌⡄⠀▀▀▀▀▀▀▀▀▀▀▀▀⠈⠀⠀⣴⠀⢈⢀⢀▄                      ■
+                       ▐⠀⠀⢈⠀⠰⠀⠀⢃⠸▀▀▀▀▀▀▀▀▀▀▀▀⠀⡇⠀⣌⠀⠋⠸⠸⢸▖     ╭───╮ ╭───╮ ╭── ╷
+                       ▝⢃⠀⢸⠀⠀⠳⠀⠈⡴▀▀▀▀▀▀▀▀▀▀▀▀⠰⢀⠃⠋⠃⡄⠰⠃⠈      │   │ │   │ │   │
+                        ▝▜⡌⠀⡄⡄⡷⢀⡄▀▀▀▀▀▀▀▀▀▀▀▀⠀⠰⠰⠀⠃⠀⠀▀       ╵   ╵ ╰───╯ ╵   ╵
+
+                                                            cli v0.42.0  ~/tidepool
+
+
+
+  Default agent   you can switch any time with /agent
+  › ○ Claude Code    not signed in
+    ○ Codex          not signed in
+    ○ Antigravity    not signed in   ↓ 5 more
+
+    Permissions    ‹ Agent ›   the agent decides what to ask you about
+    Usage stats    ‹ Share ›   help the Nori team improve the CLI
+                   Counts only. Never your prompts, code, file paths or sessions.
+
+  Enter start   ↑↓ move   ←→ change   q quit

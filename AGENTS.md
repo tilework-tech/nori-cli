@@ -120,7 +120,7 @@ runtime), `acp-host`, `tui`, `nori-config`, and `nori-protocol`. Other crates:
 - `installed`: install tracking.
 - `skillsets`: client for the `nori-skillsets` CLI.
 - `tui-components`: reusable Ratatui components, including `onigiri`, the animated
-  first-launch welcome (not yet used by `tui`). Its implementation, tests,
+  first-launch welcome above the setup form (`tui/src/nori/onboarding/`). Its implementation, tests,
   snapshots, and demo runner (`--example onigiri`) all live in `src/onigiri/`;
   see the module comment in `src/onigiri/mod.rs`.
 - `mock-acp-agent`: scriptable ACP agent for tests.

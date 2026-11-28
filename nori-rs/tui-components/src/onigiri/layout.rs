@@ -1,6 +1,7 @@
 //! Picks the arrangement and ball size that fit a terminal.
 
 use super::geometry::Place;
+use super::mini;
 use super::word;
 
 /// Smallest ball (rows) that plays the full intro with particles.
@@ -10,6 +11,8 @@ pub(crate) const TEXTURE_ROWS: f32 = 7.0;
 /// Smallest ball (rows) worth drawing at all; below it, a one-line header.
 const MIN_ROWS: f32 = 4.0;
 const MAX_ROWS: f32 = 34.0;
+/// Narrowest area for the mini onigiri beside the text wordmark.
+const MINI_COLS: f32 = 30.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Layout {
@@ -17,6 +20,8 @@ pub enum Layout {
     Side { rows: f32 },
     /// Ball centred, text wordmark line under it.
     Stack { rows: f32 },
+    /// The hand-pixelled mini onigiri, 3 rows tall, beside a text wordmark.
+    Mini,
     /// One-line text header.
     Line,
 }
@@ -49,6 +54,8 @@ pub fn layout(w: u16, h: u16) -> Layout {
         Layout::Side { rows: side }
     } else if stack >= MIN_ROWS {
         Layout::Stack { rows: stack }
+    } else if h >= mini::HEIGHT as f32 && w >= MINI_COLS {
+        Layout::Mini
     } else {
         Layout::Line
     }
