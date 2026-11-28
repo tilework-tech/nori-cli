@@ -347,7 +347,7 @@ contract lives in the Handroll repo.
 
 ## Terminal status
 
-With `[tui] program_status = true`, Nori tells the terminal what the
+Unless `[tui] program_status = false`, Nori tells the terminal what the
 foreground session is doing, using the
 [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status)
 (OSC 7501, rev 0.4). Terminals that support it, such as kitty and iTerm2, can
