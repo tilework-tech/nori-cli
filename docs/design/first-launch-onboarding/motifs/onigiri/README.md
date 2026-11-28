@@ -12,15 +12,14 @@ then a light circles the ball for as long as the welcome is on screen. The
 
 | ms | What happens |
 |---|---|
-| 0–860 | Grains (Braille dots) fly in from a looser cloud of the same shape, overshoot their spot by about 12% and spring back. |
-| 860–970 | Press: the solid ball grows from the centre and squashes 10%. |
-| 970–1230 | Hop: the ball springs up stretched, rounds out at the top, and falls back. |
-| 1230–1750 | Landing: a squash that wobbles out elastically. |
-| 1750–2130 | The nori band wraps up from the base, one row at a time. |
-| 1250–2080 | Four pens write `n`, `o`, `r`, `i` at once (60 ms apart) in half-cell steps, leaving unlit glass. |
+| 150–980 | Four pens write `n`, `o`, `r`, `i` at once (60 ms apart) in half-cell steps, leaving unlit glass. |
 | per letter | Each finished letter ignites with a neon stutter (330 ms), glows, then cools over 0.9 s to a faint resting glow. |
-| 2230–2780 | The green i dot falls, squashes, bounces, and ripples down the stem. |
-| 1900→ | The light eases up to speed over 1.2 s, then turns once every 6 s. |
+| 700–1560 | As the pens finish, grains (Braille dots) fly into frame, overshoot their spot by about 12% and spring back. |
+| 1560–1670 | Press: the solid ball grows from the centre and squashes 10%. |
+| 1670–1930 | Hop: the ball springs up stretched and falls back; the green i dot falls at the same time. |
+| 1930 | Ball and dot land on the same frame: the ball squashes and wobbles out over 0.5 s, the dot squashes, bounces and ripples down the stem. |
+| 2450–2830 | The nori band wraps up from the base, one row at a time. |
+| 2450→ | The light eases up to speed over 1.2 s, then turns once every 6 s. |
 | 3400→ | A shimmer runs across the wordmark and back once per turn of the light. |
 
 ## Wordmark

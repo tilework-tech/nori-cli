@@ -34,9 +34,9 @@ expression: "dump(&still(Tier::X256, 60, 20))"
 000000000000000000010f03090g0g0g0f0q0r050s0t060u0v0c0w0x0700000000000000000000000000000000000000000000000000000000000000
 00000000000000000203090f0g0g0g090y0z050A0B0B0t0h0b0b0c0x0C0e000000000000000000000000000000000000000000000000000000000000
 000000000000000203030f0g0g0f0D0E0F0F0F0F0F0F0F0F0G0b0b0H0w0I0J000000000000000000000000000000000000000000000K000000000000
-000000000000020q030f0a090L0M0N0N0N0N0N0N0N0N0N0N0O0O0P0Q0c0w0R0S00000000000T0T0T0T0T0U0T0T0T0T0T0U0T0T0T0U0T000000000000
-0000000000000V0L050W0b0X0i0X0Y0Y0Y0Y0Y0Y0Y0Y0Y0Y0X0i0X0X0Z0R100J00000000000T0U000U0T0U0T0U0U0U0T0U0T0U00000T000000000000
-00000000000000110d12121213130Y0Y0Y0Y0Y0Y0Y0Y0Y0Y1213131210120J0000000000000T0000000T0U0T0T0T0T0T0U0T0000000T000000000000
+000000000000020q030f0a090L0M0N0N0N0N0N0N0N0N0N0N0O0O0P0Q0c0w0R0S00000000000T0T0T0T0T0U0T0T0T0T0T0U0T0T0T000V000000000000
+0000000000000W0L050X0b0Y0i0Y0Z0Z0Z0Z0Z0Z0Z0Z0Z0Z0Y0i0Y0Y100R110J00000000000V0000000V0U0T0000000T0U0V0000000V000000000000
+000000000000000V0d12121213130Z0Z0Z0Z0Z0Z0Z0Z0Z0Z1213131211120J0000000000000V0000000V000T0T0T0T0T000V0000000V000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000014141414141414000014141414141414141414
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -63,7 +63,7 @@ expression: "dump(&still(Tier::X256, 60, 20))"
 0H Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(250))
 0I Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(245))
 0J Style::new().fg(Color::Indexed(102)).bg(Color::Reset)
-0K Style::new().fg(Color::Indexed(71)).bg(Color::Indexed(233))
+0K Style::new().fg(Color::Indexed(71)).bg(Color::Reset)
 0L Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(253))
 0M Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(188))
 0N Style::new().fg(Color::Indexed(234)).bg(Color::Indexed(233))
@@ -74,11 +74,11 @@ expression: "dump(&still(Tier::X256, 60, 20))"
 0S Style::new().fg(Color::Indexed(245)).bg(Color::Reset)
 0T Style::new().fg(Color::Indexed(250)).bg(Color::Indexed(233))
 0U Style::new().fg(Color::Reset).bg(Color::Indexed(233))
-0V Style::new().fg(Color::Indexed(254)).bg(Color::Reset)
-0W Style::new().fg(Color::Indexed(249)).bg(Color::Indexed(188))
-0X Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(145))
-0Y Style::new().fg(Color::Indexed(233)).bg(Color::Indexed(233))
-0Z Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(247))
+0V Style::new().fg(Color::Indexed(250)).bg(Color::Reset)
+0W Style::new().fg(Color::Indexed(254)).bg(Color::Reset)
+0X Style::new().fg(Color::Indexed(249)).bg(Color::Indexed(188))
+0Y Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(145))
+0Z Style::new().fg(Color::Indexed(233)).bg(Color::Indexed(233))
 0a Style::new().fg(Color::Indexed(254)).bg(Color::Indexed(231))
 0b Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(251))
 0c Style::new().fg(Color::Indexed(255)).bg(Color::Indexed(250))
@@ -105,8 +105,8 @@ expression: "dump(&still(Tier::X256, 60, 20))"
 0x Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(248))
 0y Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(254))
 0z Style::new().fg(Color::Indexed(231)).bg(Color::Indexed(254))
-10 Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(102))
-11 Style::new().fg(Color::Indexed(250)).bg(Color::Reset)
+10 Style::new().fg(Color::Indexed(248)).bg(Color::Indexed(247))
+11 Style::new().fg(Color::Indexed(102)).bg(Color::Indexed(102))
 12 Style::new().fg(Color::Indexed(252)).bg(Color::Indexed(102))
 13 Style::new().fg(Color::Indexed(245)).bg(Color::Indexed(245))
 14 Style::new().fg(Color::Reset).bg(Color::Reset).dim()

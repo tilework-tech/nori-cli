@@ -7,6 +7,8 @@ use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 
 use super::Tier;
+use super::color::Mat;
+use super::color::color;
 use super::tests::dump;
 use super::tests::intro;
 use super::tests::still;
@@ -71,6 +73,28 @@ fn all_four_pens_are_writing_almost_at_once() {
 }
 
 #[test]
+fn dot_falls_while_the_ball_hops_and_lands_with_it() {
+    use super::timeline::HOP_AT;
+    use super::timeline::LAND_AT;
+    let has = |ms: f32, glyph: &str| {
+        let buf = intro(Tier::True, 100, 30, ms as u64);
+        let green = color(Tier::True, Mat::Green, 1.0);
+        buf.area
+            .positions()
+            .any(|p| buf[p].symbol() == glyph && buf[p].fg == green)
+    };
+    let falling = |ms: f32| has(ms, "▀") || has(ms, "▄");
+    assert_eq!(
+        [
+            falling(HOP_AT - 20.0),
+            falling(HOP_AT + 100.0),
+            has(LAND_AT + 10.0, "▬")
+        ],
+        [false, true, true]
+    );
+}
+
+#[test]
 fn resting_wordmark_keeps_a_faint_glow() {
     let buf = intro(Tier::True, 100, 30, 4000);
     let s = strokes(&buf);
@@ -116,7 +140,7 @@ fn ansi16_wordmark_paints_no_background() {
         .unwrap_or(0)
         - 2;
     let mut painted = Vec::new();
-    for ms in (1200..3600).step_by(40).chain([6750, 9750]) {
+    for ms in (100..3600).step_by(40).chain([7300, 10_300]) {
         let buf = intro(Tier::Ansi16, 100, 30, ms);
         painted.extend(
             buf.area
@@ -150,7 +174,7 @@ fn shine_offset(buf: &Buffer) -> f32 {
 #[test]
 fn shimmer_sits_on_the_side_the_light_is_on() {
     // Light at 120 degrees (lower left) and at -60 degrees (upper right).
-    let got = [6750, 9750].map(|ms| shine_offset(&intro(Tier::True, 100, 30, ms)) > 0.0);
+    let got = [7300, 10_300].map(|ms| shine_offset(&intro(Tier::True, 100, 30, ms)) > 0.0);
     assert_eq!(got, [false, true]);
 }
 
@@ -165,7 +189,7 @@ fn shimmer_repeats_with_every_turn_of_the_light() {
 #[test]
 fn wordmark_intro_truecolor() {
     // Pens mid-stroke, letters igniting, dot falling, dot squashed, cooled.
-    for ms in [1500, 1900, 2350, 2520, 3300] {
+    for ms in [600, 1100, 1800, 1960, 3300] {
         assert_snapshot!(
             format!("word_intro_true_100x30_{ms}ms"),
             dump(&intro(Tier::True, 100, 30, ms))
@@ -181,8 +205,8 @@ fn wordmark_shimmer_in_each_tier() {
         (Tier::Ansi16, "ansi16"),
     ] {
         assert_snapshot!(
-            format!("word_shimmer_{name}_100x30_6750ms"),
-            dump(&intro(tier, 100, 30, 6750))
+            format!("word_shimmer_{name}_100x30_7300ms"),
+            dump(&intro(tier, 100, 30, 7300))
         );
     }
 }

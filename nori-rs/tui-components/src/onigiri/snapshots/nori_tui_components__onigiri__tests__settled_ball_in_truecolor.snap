@@ -34,11 +34,11 @@ expression: "dump(&still(Tier::True, 60, 20))"
 000000000000000000010J0K0L0M0y0N0O0P0Q0R0S0T0U0V0W0g0X0Y0Z00000000000000000000000000000000000000000000000000000000000000
 000000000000000009101112130N0M1415161718191a0T0D0E1b1c1d1e1f000000000000000000000000000000000000000000000000000000000000
 000000000000001g1h0K1i130A0O1j1k1l1m1n1n1n1o1p1q1r0E1b1s1t1u1v000000000000000000000000000000000000000000001w000000000000
-0000000000001x0P0v0l1y0j1z1A1B1C1D1D1D1D1D1D1C1C1E1E1F1G1H1t1I1J00000000001K1L1M1L1N1O1N1L1M1L1N1O1N1L1K1P1Q000000000000
-0000000000001R1S1T1U1b1V0r1W1X1X1X1X1X1X1X1X1X1X1W0r1V1Y1Z20211v00000000001Q220022231P23242224231P232200001Q000000000000
-00000000000000250h2626262727282828282828282828282927272621261v0000000000002a0000001Q1P1N1L1M1L1N1P1Q0000002a000000000000
+0000000000001x0P0v0l1y0j1z1A1B1C1D1D1D1D1D1D1C1C1E1E1F1G1H1t1I1J00000000001K1L1M1L1L1N1L1L1M1L1L1N1L1L1K001O000000000000
+0000000000001P1Q1R1S1b1T0r1U1V1V1V1V1V1V1V1V1V1V1U0r1T1W1X1Y1Z1v00000000001O0000001O1N1K0000001K1N1O0000001O000000000000
+00000000000000200h212121222223232323232323232323242222211Z211v0000000000001O0000001O001L1L1M1L1L001O0000001O000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000002b2b2b2b2b2b2b00002b2b2b2b2b2b2b2b2b2b
+000000000000000000000000000000000000000000000000000000000000000000000000000000000025252525252525000025252525252525252525
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -125,22 +125,22 @@ expression: "dump(&still(Tier::True, 60, 20))"
 1H Style::new().fg(Color::Rgb(229, 233, 238)).bg(Color::Rgb(181, 187, 193))
 1I Style::new().fg(Color::Rgb(139, 144, 153)).bg(Color::Rgb(128, 133, 142))
 1J Style::new().fg(Color::Rgb(132, 137, 146)).bg(Color::Reset)
-1K Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(23, 31, 31))
-1L Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(23, 34, 32))
-1M Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(23, 35, 33))
-1N Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(23, 32, 31))
-1O Style::new().fg(Color::Reset).bg(Color::Rgb(23, 31, 31))
-1P Style::new().fg(Color::Reset).bg(Color::Rgb(23, 29, 30))
-1Q Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(22, 28, 30))
-1R Style::new().fg(Color::Rgb(219, 223, 228)).bg(Color::Reset)
-1S Style::new().fg(Color::Rgb(255, 255, 255)).bg(Color::Rgb(214, 219, 224))
-1T Style::new().fg(Color::Rgb(184, 190, 197)).bg(Color::Rgb(214, 219, 224))
-1U Style::new().fg(Color::Rgb(174, 179, 186)).bg(Color::Rgb(210, 215, 220))
-1V Style::new().fg(Color::Rgb(227, 231, 236)).bg(Color::Rgb(170, 176, 183))
-1W Style::new().fg(Color::Rgb(225, 229, 234)).bg(Color::Rgb(167, 172, 180))
-1X Style::new().fg(Color::Rgb(22, 34, 25)).bg(Color::Rgb(21, 33, 24))
-1Y Style::new().fg(Color::Rgb(223, 227, 232)).bg(Color::Rgb(167, 172, 180))
-1Z Style::new().fg(Color::Rgb(160, 165, 173)).bg(Color::Rgb(153, 158, 166))
+1K Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(22, 27, 29))
+1L Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(22, 28, 30))
+1M Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(23, 29, 30))
+1N Style::new().fg(Color::Reset).bg(Color::Rgb(22, 27, 29))
+1O Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Reset)
+1P Style::new().fg(Color::Rgb(219, 223, 228)).bg(Color::Reset)
+1Q Style::new().fg(Color::Rgb(255, 255, 255)).bg(Color::Rgb(214, 219, 224))
+1R Style::new().fg(Color::Rgb(184, 190, 197)).bg(Color::Rgb(214, 219, 224))
+1S Style::new().fg(Color::Rgb(174, 179, 186)).bg(Color::Rgb(210, 215, 220))
+1T Style::new().fg(Color::Rgb(227, 231, 236)).bg(Color::Rgb(170, 176, 183))
+1U Style::new().fg(Color::Rgb(225, 229, 234)).bg(Color::Rgb(167, 172, 180))
+1V Style::new().fg(Color::Rgb(22, 34, 25)).bg(Color::Rgb(21, 33, 24))
+1W Style::new().fg(Color::Rgb(223, 227, 232)).bg(Color::Rgb(167, 172, 180))
+1X Style::new().fg(Color::Rgb(160, 165, 173)).bg(Color::Rgb(153, 158, 166))
+1Y Style::new().fg(Color::Rgb(142, 147, 156)).bg(Color::Rgb(128, 133, 142))
+1Z Style::new().fg(Color::Rgb(128, 133, 142)).bg(Color::Rgb(128, 133, 142))
 1a Style::new().fg(Color::Rgb(207, 213, 218)).bg(Color::Rgb(207, 213, 218))
 1b Style::new().fg(Color::Rgb(238, 240, 244)).bg(Color::Rgb(191, 197, 203))
 1c Style::new().fg(Color::Rgb(233, 236, 240)).bg(Color::Rgb(181, 187, 193))
@@ -163,19 +163,13 @@ expression: "dump(&still(Tier::True, 60, 20))"
 1t Style::new().fg(Color::Rgb(223, 227, 232)).bg(Color::Rgb(163, 169, 176))
 1u Style::new().fg(Color::Rgb(203, 208, 214)).bg(Color::Rgb(132, 137, 146))
 1v Style::new().fg(Color::Rgb(128, 133, 142)).bg(Color::Reset)
-1w Style::new().fg(Color::Rgb(66, 190, 101)).bg(Color::Rgb(22, 28, 30))
+1w Style::new().fg(Color::Rgb(66, 190, 101)).bg(Color::Reset)
 1x Style::new().fg(Color::Rgb(234, 237, 241)).bg(Color::Reset)
 1y Style::new().fg(Color::Rgb(227, 231, 236)).bg(Color::Rgb(250, 251, 252))
 1z Style::new().fg(Color::Rgb(255, 255, 255)).bg(Color::Rgb(216, 221, 226))
-20 Style::new().fg(Color::Rgb(142, 147, 156)).bg(Color::Rgb(128, 133, 142))
-21 Style::new().fg(Color::Rgb(128, 133, 142)).bg(Color::Rgb(128, 133, 142))
-22 Style::new().fg(Color::Reset).bg(Color::Rgb(22, 27, 29))
-23 Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(23, 29, 30))
-24 Style::new().fg(Color::Reset).bg(Color::Rgb(22, 28, 30))
-25 Style::new().fg(Color::Rgb(184, 190, 197)).bg(Color::Reset)
-26 Style::new().fg(Color::Rgb(201, 206, 212)).bg(Color::Rgb(128, 133, 142))
-27 Style::new().fg(Color::Rgb(132, 137, 146)).bg(Color::Rgb(132, 137, 146))
-28 Style::new().fg(Color::Rgb(20, 31, 24)).bg(Color::Rgb(20, 31, 24))
-29 Style::new().fg(Color::Rgb(199, 204, 210)).bg(Color::Rgb(128, 133, 142))
-2a Style::new().fg(Color::Rgb(180, 186, 194)).bg(Color::Rgb(22, 27, 29))
-2b Style::new().fg(Color::Reset).bg(Color::Reset).dim()
+20 Style::new().fg(Color::Rgb(184, 190, 197)).bg(Color::Reset)
+21 Style::new().fg(Color::Rgb(201, 206, 212)).bg(Color::Rgb(128, 133, 142))
+22 Style::new().fg(Color::Rgb(132, 137, 146)).bg(Color::Rgb(132, 137, 146))
+23 Style::new().fg(Color::Rgb(20, 31, 24)).bg(Color::Rgb(20, 31, 24))
+24 Style::new().fg(Color::Rgb(199, 204, 210)).bg(Color::Rgb(128, 133, 142))
+25 Style::new().fg(Color::Reset).bg(Color::Reset).dim()

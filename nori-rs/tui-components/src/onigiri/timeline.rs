@@ -2,11 +2,13 @@
 
 use std::time::Duration;
 
+/// Grains start flying in here, as the wordmark's pens finish.
+pub(crate) const GATHER_AT: f32 = 700.0;
 pub(crate) const GRAIN_SPREAD: f32 = 380.0;
 pub(crate) const GRAIN_DUR: f32 = 420.0;
 /// Grains overshoot their spot by this much of their path, then spring back.
 pub(crate) const GRAIN_OVERSHOOT: f32 = 1.9;
-pub(crate) const PRESS_AT: f32 = 860.0;
+pub(crate) const PRESS_AT: f32 = GATHER_AT + 860.0;
 pub(crate) const PRESS_DOWN: f32 = 110.0;
 pub(crate) const PRESS_FRONT: f32 = 120.0;
 /// After the press the ball springs up stretched, falls back and lands.
@@ -22,8 +24,9 @@ pub(crate) const PRESS_DONE: f32 = LAND_AT + WOBBLE;
 /// The band wraps once the ball has stopped wobbling.
 pub(crate) const NORI_AT: f32 = PRESS_DONE;
 pub(crate) const NORI_DUR: f32 = 380.0;
-/// The light starts circling here, easing up to speed over LIGHT_RAMP.
-pub(crate) const LIGHT_AT: f32 = 1900.0;
+/// The light starts circling once the ball has settled, easing up to speed
+/// over LIGHT_RAMP.
+pub(crate) const LIGHT_AT: f32 = PRESS_DONE;
 pub(crate) const LIGHT_RAMP: f32 = 1200.0;
 /// One full turn of the light.
 pub(crate) const LIGHT_PERIOD: f32 = 6000.0;

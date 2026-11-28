@@ -10,6 +10,7 @@ use super::shape::BRAILLE_BITS;
 use super::shape::clamp01;
 use super::shape::hash;
 use super::shape::sd_ball;
+use super::timeline::GATHER_AT;
 use super::timeline::GRAIN_DUR;
 use super::timeline::GRAIN_OVERSHOOT;
 use super::timeline::GRAIN_SPREAD;
@@ -61,7 +62,8 @@ impl Grains {
                 let h2 = hash(by + 911, bx - 77);
                 let h3 = hash(bx * 3 + 5, by * 5 + 9);
                 let dist = u.hypot(v);
-                let start = GRAIN_SPREAD * (0.55 * h2 + 0.45 * (1.0 - dist * 1.8).max(0.0));
+                let start =
+                    GATHER_AT + GRAIN_SPREAD * (0.55 * h2 + 0.45 * (1.0 - dist * 1.8).max(0.0));
                 let ang = h3 * TAU;
                 let spread = 0.25 + 0.45 * h2;
                 let sx = x + (x - g.p.cx) * spread + ang.cos() * fly;
@@ -117,6 +119,10 @@ impl Grains {
         let (x0, y0, w) = self.origin;
         self.slots.fill(Slot::default());
         for d in &self.dots {
+            // A grain comes into frame when it starts flying.
+            if t < d.start {
+                continue;
+            }
             let x = clamp01((t - d.start) / d.dur);
             let k = spring(x);
             let (px, py) = (

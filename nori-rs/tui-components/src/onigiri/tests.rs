@@ -134,8 +134,8 @@ fn settled_ball_in_truecolor() {
 
 #[test]
 fn intro_timeline_truecolor() {
-    // Gather, press, band wrap, wordmark.
-    for ms in [300, 950, 1200, 1500] {
+    // Gather, press, hop, band wrap.
+    for ms in [1000, 1620, 1800, 2600] {
         assert_snapshot!(
             format!("intro_true_100x30_{ms}ms"),
             dump(&intro(Tier::True, 100, 30, ms))
@@ -164,7 +164,7 @@ fn intro_draws_at_60fps_and_waits_for_the_light_without_an_intro() {
         scene.next_frame_in(at(500), small),
     ]
     .map(|d| d.map(|d| d.as_millis()));
-    assert_eq!(got, [Some(16), Some(16), Some(1400)]);
+    assert_eq!(got, [Some(16), Some(16), Some(1950)]);
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn tiny_areas_draw_inside_their_bounds() {
 fn flying_grains_stay_inside_a_sub_area() {
     let area = Rect::new(10, 5, 100, 30);
     let mut buf = Buffer::empty(Rect::new(0, 0, 120, 40));
-    Onigiri::new(Tier::True, caption()).render(Duration::from_millis(300), area, &mut buf);
+    Onigiri::new(Tier::True, caption()).render(Duration::from_millis(1000), area, &mut buf);
     let outside = buf
         .area
         .positions()

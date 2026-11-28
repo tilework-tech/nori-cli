@@ -4,15 +4,18 @@
 
 use super::super::shape::clamp01;
 use super::super::shape::smooth;
+use super::super::timeline::HOP;
+use super::super::timeline::LAND_AT;
 
 /// The pen starts writing.
-pub const WORD_AT: f32 = 1250.0;
+pub const WORD_AT: f32 = 150.0;
 /// Each letter has its own pen; they start this far apart, left to right.
 pub const STAGGER: f32 = 60.0;
 /// The longest letter takes this long to write at any size; the others use
 /// the same pen speed, so shorter letters finish sooner.
 pub const LETTER_DUR: f32 = 650.0;
 /// Every pen has finished by here.
+#[cfg(test)]
 pub const DRAW_END: f32 = WORD_AT + 3.0 * STAGGER + LETTER_DUR;
 /// A freshly drawn stroke fades from the pen's white to unlit glass.
 pub const TRAIL: f32 = 260.0;
@@ -26,7 +29,7 @@ pub const IGNITE_DUR: f32 = IGNITE.len() as f32 * IGNITE_SLOT;
 /// After igniting, the neon cools to the resting wordmark over this long.
 pub const COOL: f32 = 900.0;
 /// Glow left behind once the neon has cooled (0 = none).
-pub const GLOW_REST: f32 = 0.35;
+pub const GLOW_REST: f32 = 0.2;
 /// Glow strength: background brightness reached inside a lit letter, and
 /// how quickly overlapping glow saturates.
 pub const GLOW_MAX: f32 = 0.6;
@@ -34,10 +37,10 @@ pub const GLOW_K: f32 = 0.5;
 /// Glow radius in cells: a constant plus this much per letter row.
 pub const GLOW_R: (f32, f32) = (1.0, 0.15);
 
-/// The i dot starts falling.
-pub const DOT_AT: f32 = DRAW_END + 150.0;
-pub const DOT_FALL: f32 = 260.0;
-pub const DOT_LAND: f32 = DOT_AT + DOT_FALL;
+/// The i dot falls while the ball hops and lands on the same frame.
+pub const DOT_FALL: f32 = HOP;
+pub const DOT_LAND: f32 = LAND_AT;
+pub const DOT_AT: f32 = DOT_LAND - DOT_FALL;
 pub const SQUASH: f32 = 70.0;
 pub const BOUNCE: f32 = 220.0;
 /// The landing ripple runs down the i stem at this many ms per row.
