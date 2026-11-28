@@ -1,11 +1,8 @@
 ---
-source: tui/src/nori/onboarding/setup_step.rs
+source: tui/src/nori/onboarding/welcome_step/tests.rs
 expression: "screen(&s, w, h)"
 ---
-    ▄▀▀▄
-  ▄▀▀▀▀▀▀▄  nori cli v0.42.0  ~/tidepool
-  ▀▀▀▀▀▀▀▀
-
+ nori cli v0.42.0
   Default agent   you can switch any time with /agent
   › ○ Claude Code    not signed in
     ○ Codex          not signed in

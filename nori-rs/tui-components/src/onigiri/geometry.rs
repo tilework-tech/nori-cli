@@ -6,6 +6,11 @@ use super::shape::ASP;
 use super::shape::ball_extent;
 use super::shape::sd_ball;
 use super::shape::smooth;
+use super::timeline::BUMP_CROUCH;
+use super::timeline::BUMP_HEIGHT;
+use super::timeline::BUMP_HOP;
+use super::timeline::BUMP_LAND;
+use super::timeline::BUMP_WOBBLE;
 use super::timeline::HOP;
 use super::timeline::HOP_AT;
 use super::timeline::HOP_HEIGHT;
@@ -140,6 +145,30 @@ impl Pose {
                 0.9 * (-4.0 * tau).exp() * (tau * TAU * 1.6).cos() * (1.0 - tau)
             };
             Pose { squash, lift: 0.0 }
+        }
+    }
+
+    /// `b` ms into a bump: a crouch, a small stretched hop, then a landing
+    /// squash that wobbles out.
+    pub fn bump(b: f32, p: &Place) -> Pose {
+        if b < BUMP_CROUCH {
+            Pose {
+                squash: 0.6 * smooth(b / BUMP_CROUCH),
+                lift: 0.0,
+            }
+        } else if b < BUMP_LAND {
+            let x = (b - BUMP_CROUCH) / BUMP_HOP;
+            let stretch = -0.4 * (2.0 * x - 1.0).powi(2);
+            Pose {
+                squash: 0.6 + (stretch - 0.6) * smooth(x / 0.25),
+                lift: BUMP_HEIGHT * Place::rows(p.s) * 2.0 * 4.0 * x * (1.0 - x),
+            }
+        } else {
+            let tau = ((b - BUMP_LAND) / BUMP_WOBBLE).min(1.0);
+            Pose {
+                squash: 0.6 * (-4.0 * tau).exp() * (tau * TAU * 1.6).cos() * (1.0 - tau),
+                lift: 0.0,
+            }
         }
     }
 }

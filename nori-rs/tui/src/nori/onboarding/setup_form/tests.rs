@@ -10,12 +10,13 @@ use ratatui::layout::Rect;
 use ratatui::widgets::WidgetRef;
 
 use super::AgentChoice;
-use super::Density;
 use super::Permission;
 use super::SetupChoices;
 use super::SetupForm;
 use super::save;
 use crate::nori::onboarding::KeyboardHandler;
+use crate::nori::onboarding::welcome_step::Density;
+use crate::nori::onboarding::welcome_step::WelcomeForm;
 
 fn agents(signed_in: &[AgentKind]) -> Vec<AgentChoice> {
     [

@@ -13,8 +13,8 @@ use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::has_composer_row;
 
-const TRUST_PROMPT: &str = "You are running Nori in";
-const COMPACT_QUESTION: &str = "compact tool output in this project?";
+const TRUST_PROMPT: &str = "Work without asking";
+const COMPACT_QUESTION: &str = "Tool output";
 const REPLY: &str = "All three widget tests pass.";
 /// Only the full view shows output lines before the last one.
 const EARLY_OUTPUT_LINE: &str = "test widgets::wraps_long_text ... ok";
@@ -75,14 +75,30 @@ impl Workspace {
     }
 }
 
-fn trust(session: &mut TuiSession) {
+/// Waits for the trust form to finish unrolling (keys pressed while it
+/// unrolls only reveal it), then picks "Work without asking".
+fn open_trust_form(session: &mut TuiSession) -> String {
     session
-        .wait_for_text(TRUST_PROMPT, TIMEOUT)
-        .expect("trust prompt");
+        .wait_for(
+            |screen| screen.contains(TRUST_PROMPT) && screen.contains("Enter start"),
+            TIMEOUT,
+        )
+        .expect("trust form");
+    session.settle(Duration::from_millis(300));
+    let screen = session.screen_contents();
     session.send_key(Key::Char('y')).expect("trust directory");
-    session
-        .wait_for_text(COMPACT_QUESTION, TIMEOUT)
-        .expect("compact question after trust");
+    screen
+}
+
+/// Picks "Work without asking" on a trust form that also asks about tool
+/// output; the caller answers that and submits.
+fn trust(session: &mut TuiSession) {
+    let screen = open_trust_form(session);
+    assert!(screen.contains(COMPACT_QUESTION), "{screen}");
+}
+
+fn submit(session: &mut TuiSession) {
+    session.send_key(Key::Enter).expect("submit trust form");
 }
 
 fn run_command(session: &mut TuiSession) -> String {
@@ -120,15 +136,13 @@ fn assert_compact(screen: &str) {
 }
 
 #[test]
-fn skipping_the_compact_question_keeps_full_output_and_writes_no_preference() {
+fn leaving_tool_output_untouched_keeps_full_output_and_writes_no_preference() {
     let workspace = Workspace::new("agent = \"mock-model\"\n");
     let project = workspace.project("alpha");
 
     let mut session = workspace.launch(&project);
     trust(&mut session);
-    session
-        .send_key(Key::Escape)
-        .expect("skip compact question");
+    submit(&mut session);
     assert_full(&run_command(&mut session));
 
     let config = workspace.config();
@@ -145,6 +159,7 @@ fn compact_opt_in_survives_relaunch_and_stays_in_its_project() {
     let mut first = workspace.launch(&compact_project.join("src/widgets"));
     trust(&mut first);
     first.send_key(Key::Char('c')).expect("choose compact");
+    submit(&mut first);
     assert_compact(&run_command(&mut first));
     assert!(first.terminate_and_wait(TIMEOUT));
 
@@ -154,7 +169,7 @@ fn compact_opt_in_survives_relaunch_and_stays_in_its_project() {
 
     let mut other = workspace.launch(&other_project);
     trust(&mut other);
-    other.send_key(Key::Enter).expect("keep full output");
+    submit(&mut other);
     assert_full(&run_command(&mut other));
 }
 
@@ -179,12 +194,10 @@ fn global_compact_setting_applies_without_asking_again() {
     let project = workspace.project("alpha");
 
     let mut session = workspace.launch(&project);
-    session
-        .wait_for_text(TRUST_PROMPT, TIMEOUT)
-        .expect("trust prompt");
-    session.send_key(Key::Char('y')).expect("trust directory");
+    let form = open_trust_form(&mut session);
+    assert!(!form.contains(COMPACT_QUESTION), "{form}");
+    submit(&mut session);
     let screen = run_command(&mut session);
-    assert!(!screen.contains(COMPACT_QUESTION), "{screen}");
     assert_compact(&screen);
 }
 
@@ -196,6 +209,7 @@ fn choosing_full_keeps_full_after_a_one_off_override_ends() {
     let mut first = workspace.launch_with_override(&project, Some("tui.tool_output=full"));
     trust(&mut first);
     first.send_key(Key::Char('f')).expect("choose full");
+    submit(&mut first);
     assert_full(&run_command(&mut first));
     assert!(first.terminate_and_wait(TIMEOUT));
 
@@ -204,13 +218,13 @@ fn choosing_full_keeps_full_after_a_one_off_override_ends() {
 }
 
 #[test]
-fn skipping_keeps_inheriting_the_global_setting() {
+fn untouched_tool_output_keeps_inheriting_the_global_setting() {
     let workspace = Workspace::new("agent = \"mock-model\"\n");
     let project = workspace.project("alpha");
 
     let mut first = workspace.launch(&project);
     trust(&mut first);
-    first.send_key(Key::Escape).expect("skip compact question");
+    submit(&mut first);
     run_command(&mut first);
     assert!(first.terminate_and_wait(TIMEOUT));
 
@@ -230,7 +244,7 @@ fn one_off_compact_override_still_asks_and_is_not_saved() {
 
     let mut first = workspace.launch_with_override(&project, Some("tui.tool_output=compact"));
     trust(&mut first);
-    first.send_key(Key::Escape).expect("skip compact question");
+    submit(&mut first);
     assert_compact(&run_command(&mut first));
     assert!(first.terminate_and_wait(TIMEOUT));
     assert!(
@@ -251,6 +265,7 @@ fn unrelated_tui_override_keeps_the_project_compact_choice() {
     let mut first = workspace.launch(&project);
     trust(&mut first);
     first.send_key(Key::Char('c')).expect("choose compact");
+    submit(&mut first);
     run_command(&mut first);
     assert!(first.terminate_and_wait(TIMEOUT));
 

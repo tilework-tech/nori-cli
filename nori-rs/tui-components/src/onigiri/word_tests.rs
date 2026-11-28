@@ -210,3 +210,33 @@ fn wordmark_shimmer_in_each_tier() {
         );
     }
 }
+
+#[test]
+fn the_i_dot_hops_with_a_bump() {
+    use super::tests::caption;
+    use super::timeline::BUMP_CROUCH;
+    use super::timeline::BUMP_HOP;
+    use ratatui::layout::Rect;
+    use std::time::Duration;
+    let frame = |bump: bool, ms: u64| {
+        let mut scene = super::Onigiri::new(Tier::True, caption());
+        if bump {
+            scene.bump(Duration::from_millis(6000));
+        }
+        let area = Rect::new(0, 0, 100, 30);
+        let mut buf = Buffer::empty(area);
+        scene.render(Duration::from_millis(ms), area, &mut buf);
+        buf
+    };
+    let green = color(Tier::True, Mat::Green, 1.0);
+    let dot_row = |buf: &Buffer| {
+        buf.area
+            .positions()
+            .filter(|p| buf[*p].fg == green && "■▀▄█".contains(buf[*p].symbol()))
+            .map(|p| p.y)
+            .min()
+    };
+    let mid = 6000 + (BUMP_CROUCH + BUMP_HOP / 2.0) as u64;
+    let (up, rest) = (dot_row(&frame(true, mid)), dot_row(&frame(false, mid)));
+    assert!(up < rest, "dot row {up:?} mid-bump vs {rest:?} at rest");
+}

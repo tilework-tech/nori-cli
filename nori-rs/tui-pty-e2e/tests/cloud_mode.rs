@@ -337,7 +337,7 @@ fn test_cloud_mode_bypasses_local_onboarding_and_trust() {
 
     let contents = session.screen_contents();
     assert!(
-        !contents.contains("Welcome to Nori") && !contents.contains("You are running Nori in"),
+        !contents.contains("Default agent") && !contents.contains("Work without asking"),
         "cloud entry must not show local onboarding or directory trust, screen:\n{contents}"
     );
 }

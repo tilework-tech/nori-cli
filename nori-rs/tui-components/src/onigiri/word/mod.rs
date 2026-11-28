@@ -24,6 +24,9 @@ use super::color::Tier;
 use super::lighting::Light;
 use super::shape::clamp01;
 use super::shape::hash;
+use super::timeline::BUMP_CROUCH;
+use super::timeline::BUMP_HOP;
+use super::timeline::BUMP_LAND;
 use motion::BOUNCE;
 pub use motion::DOT_AT;
 use motion::DOT_GLOW;
@@ -191,8 +194,17 @@ impl Word {
     }
 
     /// Draw the wordmark at `t` ms. Without `intro` it is drawn at rest;
-    /// with `shimmer` the band follows `light`.
-    pub fn draw(&self, p: &mut Paint, t: f32, intro: bool, light: &Light, shimmer: bool) {
+    /// with `shimmer` the band follows `light`. `bump` is how far into a
+    /// bump the scene is, if one plays; the i dot hops with the ball.
+    pub fn draw(
+        &self,
+        p: &mut Paint,
+        t: f32,
+        intro: bool,
+        bump: Option<f32>,
+        light: &Light,
+        shimmer: bool,
+    ) {
         let ti = if intro { t } else { f32::INFINITY };
         let ansi = p.tier() == Tier::Ansi16;
         let style = |m: Mat, b: f32, p: &Paint| {
@@ -300,15 +312,14 @@ impl Word {
             }
         }
 
-        self.draw_dot(p, ti, ansi);
+        self.draw_dot(p, ti, bump, ansi);
     }
 
-    fn draw_dot(&self, p: &mut Paint, t: f32, ansi: bool) {
+    fn draw_dot(&self, p: &mut Paint, t: f32, bump: Option<f32>, ansi: bool) {
         if t < DOT_AT {
             return;
         }
         let green = Style::default().fg(p.pal.color(Mat::Green, 1.0));
-        let rest_row = self.top - 1;
         let since = t - DOT_LAND;
         let start = self.dot_top - 2 * (self.h + 3);
         if since < 0.0 {
@@ -316,6 +327,47 @@ impl Word {
             self.half_rect(p, self.dot_x, self.dot_w, top, top + self.dot_w - 1, green);
             return;
         }
+        match bump {
+            // The dot crouches with the ball, hops and lands with it, then
+            // ripples and bounces as it did when it first landed, without
+            // the splash and glow.
+            Some(b) if since >= SQUASH + BOUNCE => {
+                if b < BUMP_CROUCH {
+                    self.squashed_dot(p, green);
+                } else if b < BUMP_LAND {
+                    let x = (b - BUMP_CROUCH) / BUMP_HOP;
+                    let lift = ((2 * self.dot_w + 2) as f32 * 4.0 * x * (1.0 - x)).round() as i32;
+                    let top = self.dot_top - lift;
+                    self.half_rect(p, self.dot_x, self.dot_w, top, top + self.dot_w - 1, green);
+                } else {
+                    self.landed_dot(p, b - BUMP_LAND, false, ansi, green);
+                }
+            }
+            _ => self.landed_dot(p, since, true, ansi, green),
+        }
+    }
+
+    fn squashed_dot(&self, p: &mut Paint, green: Style) {
+        if self.dot_w == 1 {
+            p.glyph(self.dot_x, self.top - 1, "▬", green);
+        } else {
+            let bottom = self.dot_top + self.dot_w - 1;
+            let h = (self.dot_w / 2).max(1);
+            self.half_rect(
+                p,
+                self.dot_x - 1,
+                self.dot_w + 2,
+                bottom - h + 1,
+                bottom,
+                green,
+            );
+        }
+    }
+
+    /// The dot `since` ms after landing: a ripple down the stem, a squash
+    /// and a bounce, with a splash and a glow when `splash`.
+    fn landed_dot(&self, p: &mut Paint, since: f32, splash: bool, ansi: bool, green: Style) {
+        let rest_row = self.top - 1;
         // Ripple down the stem, then a splash either side.
         let front = since / RIPPLE_ROW;
         if front <= (self.h + 1) as f32 {
@@ -328,7 +380,7 @@ impl Word {
                 }
             }
         }
-        if since < SPLASH {
+        if splash && since < SPLASH {
             let x = since / SPLASH;
             if x < 0.75 {
                 let reach = self.dot_w + (2.0 * x * self.dot_w as f32).round() as i32;
@@ -338,20 +390,7 @@ impl Word {
             }
         }
         if since < SQUASH {
-            if self.dot_w == 1 {
-                p.glyph(self.dot_x, rest_row, "▬", green);
-            } else {
-                let bottom = self.dot_top + self.dot_w - 1;
-                let h = (self.dot_w / 2).max(1);
-                self.half_rect(
-                    p,
-                    self.dot_x - 1,
-                    self.dot_w + 2,
-                    bottom - h + 1,
-                    bottom,
-                    green,
-                );
-            }
+            self.squashed_dot(p, green);
             return;
         }
         let x = clamp01((since - SQUASH) / BOUNCE);
@@ -362,7 +401,7 @@ impl Word {
         } else {
             p.glyph(self.dot_x, rest_row, "■", green);
         }
-        if !ansi && lift == 0 {
+        if splash && !ansi && lift == 0 {
             let b = 0.8 * (-(since - SQUASH - BOUNCE).max(0.0) / DOT_GLOW).exp();
             if b > 0.03 {
                 for y in self.dot_top.div_euclid(2)..=(self.dot_top + self.dot_w - 1).div_euclid(2)

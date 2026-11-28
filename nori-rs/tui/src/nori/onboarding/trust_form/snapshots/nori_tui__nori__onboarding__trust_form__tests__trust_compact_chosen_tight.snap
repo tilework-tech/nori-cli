@@ -1,0 +1,10 @@
+---
+source: tui/src/nori/onboarding/trust_form/tests.rs
+assertion_line: 175
+expression: "render(&compact, Density::Tight)"
+---
+  Trust /workspace/project?   version controlled, so changes can be undone
+  › ● Work without asking   edits and commands run without approval
+    ○ Ask first             approve each edit and command
+    Tool output    ‹ Compact ›   one line per tool call; Ctrl+O shows all
+  Enter start   ↑↓ move   ←→ change   q quit

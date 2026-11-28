@@ -27,6 +27,15 @@ real time. After that the scene runs in real time, so the light keeps its 6 s tu
 | 2130→ | The light eases up to speed over about 1 s, then turns once every 6 s. |
 | 3010→ | A shimmer runs across the wordmark and back once per turn of the light. |
 
+**Bump.** `Onigiri::bump(at)` plays a short hop on the settled ball; the TUI
+calls it when the trust form takes over from the setup form. The ball
+crouches (`BUMP_CROUCH`, 80 ms), hops `BUMP_HEIGHT` (6%) of its height
+stretched (`BUMP_HOP`, 240 ms), and lands with a wobble (`BUMP_WOBBLE`,
+400 ms); the band rides up with it. The i dot crouches, hops and lands on
+the same frames, then ripples and bounces as on its first landing, without
+the splash or glow. A bump asked for during the intro waits until the
+landing wobble ends. Constants are in `timeline.rs` and are wall-clock.
+
 ## Wordmark
 
 Code in `tui-components/src/onigiri/word/`. Every timing and strength is a

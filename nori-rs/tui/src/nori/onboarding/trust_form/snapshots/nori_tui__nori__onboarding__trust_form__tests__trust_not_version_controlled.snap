@@ -1,0 +1,12 @@
+---
+source: tui/src/nori/onboarding/trust_form/tests.rs
+assertion_line: 173
+expression: "render(&plain, Density::Full)"
+---
+  Trust /workspace/project?   not version controlled, so asking first is safer
+    ○ Work without asking   edits and commands run without approval
+  › ● Ask first             approve each edit and command
+
+    Tool output    ‹ Full ›   every command with all of its output
+
+  Enter start   ↑↓ move   ←→ change   q quit

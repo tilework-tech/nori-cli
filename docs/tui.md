@@ -55,9 +55,26 @@ When the intro plays, the form unrolls downwards once the ball lands (about
 before the form is fully drawn shows it at once and is otherwise ignored, so
 an early Enter never submits answers you have not seen.
 
-`↑`/`↓` move, `←`/`→` or `Space` change an answer, `q` quits. Nori then asks
-whether you trust the folder and saves the answer per project in
-`config.toml`.
+`↑`/`↓` move, `←`/`→` or `Space` change an answer, `q` quits.
+
+When a folder has no trust answer yet (see
+[configuration](configuration.md)), the trust form follows under the same
+welcome; on first launch it replaces the setup form and unrolls at once
+while the ball and the i dot hop once, otherwise the intro plays and it
+unrolls when the ball lands. The welcome keeps its size when the trust form
+replaces the setup form; the screen is laid out again only when the terminal
+is resized. One Enter accepts it:
+
+- **Trust** the folder, prefilled with Work without asking in a Git
+  repository and Ask first elsewhere (`y`/`n` pick one). Saved as the
+  project's `trust_level`.
+- **Tool output**, asked only while Nori would show full tool output. It shows
+  Full; `c`/`f` or `←`/`→` pick Compact or Full, which is saved as the
+  project's `tool_output`. Left untouched, nothing is saved and the folder
+  keeps following `[tui] tool_output`.
+
+Both answers are saved for the Git project root, or for the folder outside
+Git.
 
 At startup the welcome card's title is Jiro's face, `〉_ ▐`, all in green. It
 blinks while the agent session starts, then winks and types the wordmark

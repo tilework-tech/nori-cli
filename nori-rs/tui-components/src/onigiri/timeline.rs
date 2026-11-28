@@ -66,3 +66,14 @@ pub(crate) const INTRO_FRAME: Duration = Duration::from_millis(16);
 pub(crate) const LIGHT_TICK: f32 = 1000.0 / 30.0;
 /// Lands a scheduled frame safely past its tick despite timer rounding.
 pub(crate) const TICK_SLACK: Duration = Duration::from_micros(500);
+
+/// A bump (see `Onigiri::bump`): the ball crouches, hops and lands with a
+/// wobble, and the i dot hops with it. The bump waits for the intro's
+/// landing wobble to end.
+pub(crate) const BUMP_CROUCH: f32 = 80.0;
+pub(crate) const BUMP_HOP: f32 = 240.0;
+/// Bump hop height as a fraction of the ball's height.
+pub(crate) const BUMP_HEIGHT: f32 = 0.06;
+pub(crate) const BUMP_WOBBLE: f32 = 400.0;
+pub(crate) const BUMP_LAND: f32 = BUMP_CROUCH + BUMP_HOP;
+pub(crate) const BUMP_DUR: f32 = BUMP_LAND + BUMP_WOBBLE;
