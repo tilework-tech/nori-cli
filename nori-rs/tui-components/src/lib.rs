@@ -9,6 +9,7 @@ pub mod detail;
 pub mod focus;
 pub mod markdown;
 pub mod menu;
+pub mod onigiri;
 pub mod picker;
 pub mod primitives;
 pub mod session_table;
