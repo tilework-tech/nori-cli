@@ -365,16 +365,17 @@ fn intro_plays_faster_than_its_timeline_and_the_light_keeps_its_period() {
 }
 
 #[test]
-fn landing_time_is_reported_only_when_the_intro_plays() {
-    use super::timeline::LAND_AT;
+fn entrance_end_is_reported_only_when_the_intro_plays() {
+    use super::timeline::NORI_AT;
+    use super::timeline::NORI_DUR;
     let animated = Onigiri::new(Tier::True, caption());
     let settled = Onigiri::new(Tier::True, caption()).settled();
     assert_eq!(
         [
-            animated.landed_at(Rect::new(0, 0, 100, 30)),
-            animated.landed_at(Rect::new(0, 0, 40, 16)),
-            settled.landed_at(Rect::new(0, 0, 100, 30)),
+            animated.entrance_done_at(Rect::new(0, 0, 100, 30)),
+            animated.entrance_done_at(Rect::new(0, 0, 40, 16)),
+            settled.entrance_done_at(Rect::new(0, 0, 100, 30)),
         ],
-        [Some(real(LAND_AT)), None, None]
+        [Some(real(NORI_AT + NORI_DUR)), None, None]
     );
 }
