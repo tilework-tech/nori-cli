@@ -277,7 +277,7 @@ impl NoriConfig {
             tool_output_max_lines,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             thoughts_in_history: toml.tui.thoughts_in_history.unwrap_or(true),
-            program_status: toml.tui.program_status.unwrap_or(false),
+            program_status: toml.tui.program_status.unwrap_or(true),
             program_status_approval_titles: toml
                 .tui
                 .program_status_approval_titles

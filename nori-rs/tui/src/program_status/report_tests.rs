@@ -59,9 +59,23 @@ fn decoded_message(report: &str) -> String {
 }
 
 #[test]
-fn program_status_stays_silent_unless_configured() {
+fn program_status_stays_silent_when_turned_off() {
     assert!(ProgramStatusReporter::from_config(&config(false, false)).is_none());
     assert!(ProgramStatusReporter::from_config(&config(false, true)).is_none());
+}
+
+#[test]
+fn a_default_config_reports_with_the_generic_approval_message() {
+    let mut reporter = ProgramStatusReporter::from_config(&nori_config::NoriConfig::default())
+        .expect("program status is on by default");
+    let mut out = Vec::new();
+    reporter
+        .report(&mut out, &blocked("Run cargo test"))
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        "\x1b]7501;state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk\x1b\\"
+    );
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! With `[tui] program_status = true`, plain `nori` reports the foreground
+//! Unless `[tui] program_status = false`, plain `nori` reports the foreground
 //! session's status to its terminal as OSC 7501 program status reports:
 //! idle, working, blocked, done or error. A report is written only when the
 //! status changes and is cleared when the TUI exits.
@@ -92,7 +92,7 @@ fn quit(session: &mut TuiSession) {
 
 #[test]
 fn a_turn_through_an_approval_reports_each_state_once_and_clears_on_exit() {
-    let mut session = spawn(enabled());
+    let mut session = spawn(SessionConfig::new().with_mock_response(ANSWER));
     session
         .submit_input("mock:request-permission:cargo test --offline")
         .unwrap();
@@ -123,8 +123,23 @@ fn a_turn_through_an_approval_reports_each_state_once_and_clears_on_exit() {
 }
 
 #[test]
-fn reports_are_off_unless_configured() {
-    let mut session = spawn(SessionConfig::new().with_mock_response(ANSWER));
+fn reports_stay_off_when_the_tui_opts_out() {
+    let mut session = spawn(
+        SessionConfig::new()
+            .with_mock_response(ANSWER)
+            .with_extra_config_toml("[tui]\nprogram_status = false\n"),
+    );
+    session
+        .submit_input("mock:request-permission:cargo test --offline")
+        .unwrap();
+    session
+        .wait_for_text("Would you like to allow", TIMEOUT)
+        .expect("approval prompt");
+    session.wait_out_answer_grace();
+    session.send_key(Key::Char('1')).unwrap();
+    session
+        .wait_for_text("Permission granted with option: allow", TIMEOUT)
+        .unwrap();
     session.submit_input("how many high tides").unwrap();
     session.wait_for_text(ANSWER, TIMEOUT).expect("answer");
     session.settle(Duration::from_millis(500));
