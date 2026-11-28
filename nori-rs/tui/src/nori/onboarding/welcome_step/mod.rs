@@ -3,7 +3,8 @@
 //!
 //! When the welcome's intro plays, the form unrolls once the ball lands:
 //! rows appear top-down, dim at first, then fully drawn. A form that takes
-//! over from an earlier one unrolls as soon as it does. A key pressed before
+//! over from an earlier one unrolls as soon as it does, bumps the onigiri,
+//! and keeps the welcome's size until the terminal is resized. A key pressed before
 //! the form is fully drawn reveals it at once and is not applied.
 //!
 //! The form gets the densest layout the terminal needs ([`Density`]); below
@@ -56,12 +57,17 @@ pub(crate) trait WelcomeForm: KeyboardHandler + StepStateProvider {
     fn render_with(&self, density: Density, area: Rect, buf: &mut Buffer);
 }
 
-/// The onigiri and the clock it runs on, shared by consecutive steps so the
-/// welcome carries on when one form replaces another.
+/// The onigiri, the clock it runs on and the screen's layout, shared by
+/// consecutive steps so the welcome carries on when one form replaces
+/// another.
 #[derive(Clone)]
 pub(crate) struct Welcome {
     onigiri: Rc<RefCell<Onigiri>>,
     started: Instant,
+    /// The welcome's height in the last drawn area. A form that takes over
+    /// in the same area keeps it, so the welcome does not jump; a resize
+    /// lays the screen out again for the form on it.
+    layout: Rc<Cell<Option<(Rect, u16)>>>,
 }
 
 impl Welcome {
@@ -69,6 +75,7 @@ impl Welcome {
         Self {
             onigiri: Rc::new(RefCell::new(onigiri)),
             started: Instant::now(),
+            layout: Rc::new(Cell::new(None)),
         }
     }
 }
@@ -170,8 +177,23 @@ impl<F: WelcomeForm> WelcomeStep<F> {
         }
     }
 
+    /// The welcome above and the form right under it. The welcome keeps the
+    /// height it had in this area under an earlier form, unless this form
+    /// needs more room.
     fn split(&self, area: Rect) -> (Rect, Rect) {
-        split_for(area, self.form.height(self.density(area)))
+        let form_h = self.form.height(self.density(area));
+        let (own, _) = split_for(area, form_h);
+        let height = match self.welcome.layout.get() {
+            Some((at, h)) if at == area => h.min(own.height),
+            _ => own.height,
+        };
+        let welcome = Rect { height, ..area };
+        let form = Rect {
+            y: area.y + height,
+            height: form_h.min(area.height - height),
+            ..area
+        };
+        (welcome, form)
     }
 
     fn row(&self, elapsed: Duration, index: u16) -> Row {
@@ -250,7 +272,11 @@ impl<F: WelcomeForm> WelcomeStep<F> {
         };
         self.too_small.set(false);
         let (welcome_area, form_area) = self.split(area);
+        self.welcome.layout.set(Some((area, welcome_area.height)));
         let mut welcome = self.welcome.onigiri.borrow_mut();
+        if self.follows && self.shown_at.get().is_none() {
+            welcome.bump(elapsed);
+        }
         let shown_at = self.shown_at.get().unwrap_or(elapsed);
         self.shown_at.set(Some(shown_at));
         if !self.skipped {

@@ -252,3 +252,84 @@ fn a_form_that_takes_over_unrolls_when_first_drawn() {
         [1, total]
     );
 }
+
+fn trust_after(
+    shared: Welcome,
+    follows: bool,
+) -> crate::nori::onboarding::trust_form::NoriTrustStep {
+    crate::nori::onboarding::trust_form::NoriTrustStep::trust(
+        std::env::temp_dir(),
+        std::path::PathBuf::from("/workspace/project"),
+        true,
+        true,
+        shared,
+        follows,
+    )
+}
+
+fn setup_on(shared: Welcome) -> NoriSetupStep {
+    NoriSetupStep::setup(
+        vec![AgentChoice {
+            kind: AgentKind::Codex,
+            status: AuthStatus::SignedIn,
+        }],
+        None,
+        shared,
+    )
+}
+
+#[test]
+fn the_welcome_keeps_its_size_when_a_form_takes_over() {
+    let shared = welcome(Tier::True, true);
+    let setup = setup_on(shared.clone());
+    let at = landed() + Duration::from_secs(3);
+    let _ = form_rows(&setup, TALL, at);
+    let trust = trust_after(shared, true);
+    let mut buf = Buffer::empty(TALL);
+    trust.render_at(at, TALL, &mut buf);
+    assert_eq!(trust.split(TALL).0, setup.split(TALL).0);
+}
+
+#[test]
+fn a_resize_lays_the_screen_out_again_for_the_form_on_it() {
+    let shared = welcome(Tier::True, true);
+    let setup = setup_on(shared.clone());
+    let at = landed() + Duration::from_secs(3);
+    let _ = form_rows(&setup, TALL, at);
+    let trust = trust_after(shared, true);
+    let resized = Rect::new(0, 0, 110, 40);
+    let mut buf = Buffer::empty(resized);
+    trust.render_at(at, resized, &mut buf);
+    let alone = trust_after(welcome(Tier::True, true), false);
+    assert_eq!(trust.split(resized), alone.split(resized));
+}
+
+#[test]
+fn a_form_that_takes_over_bumps_the_welcome() {
+    let at = landed() + Duration::from_secs(3);
+    let welcome_at = |follows: bool, t: Duration| {
+        let shared = welcome(Tier::True, true);
+        let trust = trust_after(shared, follows);
+        let mut buf = Buffer::empty(TALL);
+        trust.render_at(at, TALL, &mut buf);
+        let mut buf = Buffer::empty(TALL);
+        trust.render_at(t, TALL, &mut buf);
+        let (area, _) = trust.split(TALL);
+        (area.y..area.bottom())
+            .map(|y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    let mid = at + Duration::from_millis(200);
+    let later = at + Duration::from_secs(2);
+    assert_eq!(
+        [
+            welcome_at(true, mid) == welcome_at(false, mid),
+            welcome_at(true, later) == welcome_at(false, later),
+        ],
+        [false, true]
+    );
+}

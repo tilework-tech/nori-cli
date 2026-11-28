@@ -403,3 +403,56 @@ fn intro_fits_only_where_the_full_intro_plays() {
         [(100, 30), (60, 20), (40, 16), (60, 6)].map(|(w, h)| intro_fits(Rect::new(0, 0, w, h)));
     assert_eq!(got, [true, false, false, false]);
 }
+
+fn bumped(bump: Option<u64>, ms: u64) -> Buffer {
+    let mut scene = Onigiri::new(Tier::True, caption());
+    if let Some(at) = bump {
+        scene.bump(Duration::from_millis(at));
+    }
+    let area = Rect::new(0, 0, 100, 30);
+    let mut buf = Buffer::empty(area);
+    scene.render(Duration::from_millis(ms), area, &mut buf);
+    buf
+}
+
+#[test]
+fn a_bump_hops_the_ball_and_lands_it_back_where_it_was() {
+    use super::timeline::BUMP_CROUCH;
+    use super::timeline::BUMP_DUR;
+    use super::timeline::BUMP_HOP;
+    let at = 6000;
+    let mid = at + (BUMP_CROUCH + BUMP_HOP / 2.0) as u64;
+    let done = at + BUMP_DUR as u64 + 20;
+    assert!(
+        top_row(&bumped(Some(at), mid)) < top_row(&bumped(None, mid)),
+        "the ball is up mid-bump"
+    );
+    assert_eq!(
+        [
+            bumped(Some(at), at - 20) == bumped(None, at - 20),
+            bumped(Some(at), done) == bumped(None, done),
+        ],
+        [true, true]
+    );
+}
+
+#[test]
+fn a_bump_during_the_intro_waits_for_the_wobble_to_end() {
+    use super::timeline::PRESS_DONE;
+    let wobbling = real(PRESS_DONE - 20.0).as_millis() as u64;
+    assert!(bumped(Some(wobbling - 100), wobbling) == bumped(None, wobbling));
+}
+
+#[test]
+fn frames_come_at_60fps_while_a_bump_plays() {
+    use super::timeline::BUMP_DUR;
+    use super::timeline::INTRO_FRAME;
+    let area = Rect::new(0, 0, 100, 30);
+    let mut scene = Onigiri::new(Tier::True, caption()).settled();
+    scene.bump(Duration::from_millis(1000));
+    let at = |ms: f32| scene.next_frame_in(Duration::from_secs_f32(ms / 1000.0), area);
+    assert_eq!(
+        [at(900.0), at(1100.0), at(1000.0 + BUMP_DUR + 10.0)],
+        [None, Some(INTRO_FRAME), None]
+    );
+}

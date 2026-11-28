@@ -59,9 +59,11 @@ an early Enter never submits answers you have not seen.
 
 When a folder has no trust answer yet (see
 [configuration](configuration.md)), the trust form follows under the same
-welcome; on first launch it replaces the setup form and unrolls at once,
-otherwise the intro plays and it unrolls when the ball lands. One Enter
-accepts it:
+welcome; on first launch it replaces the setup form and unrolls at once
+while the ball and the i dot hop once, otherwise the intro plays and it
+unrolls when the ball lands. The welcome keeps its size when the trust form
+replaces the setup form; the screen is laid out again only when the terminal
+is resized. One Enter accepts it:
 
 - **Trust** the folder, prefilled with Work without asking in a Git
   repository and Ask first elsewhere (`y`/`n` pick one). Saved as the

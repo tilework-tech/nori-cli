@@ -8,7 +8,8 @@
 //! hand-pixelled mini onigiri beside a text wordmark (`mini`), and the
 //! smallest get a one-line text wordmark. Beside the ball, the `nori` wordmark is drawn in rounded
 //! box-drawing lines: a pen writes it, each letter ignites like neon, the i
-//! dot drops in, and a shimmer then follows the light (see `word`). Colour
+//! dot drops in, and a shimmer then follows the light (see `word`).
+//! [`Onigiri::bump`] makes the settled ball and the i dot hop once. Colour
 //! adapts to truecolor, 256 and ANSI 16 ([`Tier::detect`]).
 //!
 //! The caller owns the frame loop: call [`Onigiri::render`] with the time since
@@ -62,10 +63,12 @@ pub use layout::Layout;
 use layout::TEXTURE_ROWS;
 pub use layout::layout;
 use lighting::Light;
+use timeline::BUMP_DUR;
 use timeline::INTRO_FRAME;
 use timeline::LAND_AT;
 use timeline::LIGHT_AT;
 use timeline::LIGHT_TICK;
+use timeline::PRESS_DONE;
 use timeline::SETTLED_AT;
 use timeline::TICK_SLACK;
 use timeline::real_ms;
@@ -151,6 +154,8 @@ pub struct Onigiri {
     intro: bool,
     caption: Caption,
     scene: Option<(Rect, Scene)>,
+    /// When the last bump was asked for, since the welcome started.
+    bump_at: Option<Duration>,
 }
 
 impl Onigiri {
@@ -160,7 +165,24 @@ impl Onigiri {
             intro: true,
             caption,
             scene: None,
+            bump_at: None,
         }
+    }
+
+    /// Bump the ball at `at` (time since the welcome started): it crouches,
+    /// hops and lands with a wobble, and the i dot hops with it. A bump
+    /// asked for during the intro waits until the ball stops wobbling.
+    pub fn bump(&mut self, at: Duration) {
+        self.bump_at = Some(at);
+    }
+
+    /// How far into the bump the scene is at timeline time `t`, while one
+    /// plays. `intro` is whether this scene plays the intro.
+    fn bump_in(&self, t: f32, intro: bool) -> Option<f32> {
+        let at = scene_ms(self.bump_at?.as_secs_f32() * 1000.0);
+        let start = if intro { at.max(PRESS_DONE) } else { at };
+        let b = t - start;
+        (0.0..BUMP_DUR).contains(&b).then_some(b)
     }
 
     /// Skip the intro and draw the settled ball with a still light.
@@ -180,7 +202,10 @@ impl Onigiri {
         let until = |at: f32| {
             Some(Duration::from_secs_f32((real_ms(at) - now).max(0.0) / 1000.0) + TICK_SLACK)
         };
-        if !self.intro || rows < TEXTURE_ROWS {
+        let intro = self.intro && rows >= INTRO_ROWS;
+        if self.bump_in(t, intro).is_some() {
+            Some(INTRO_FRAME)
+        } else if !self.intro || rows < TEXTURE_ROWS {
             None
         } else if rows >= INTRO_ROWS && t < SETTLED_AT {
             Some(INTRO_FRAME)
@@ -205,10 +230,12 @@ impl Onigiri {
         if self.scene.as_ref().is_none_or(|(a, _)| *a != area) {
             self.scene = Some((area, Scene::new(area, self.intro)));
         }
+        let t = scene_ms(elapsed.as_secs_f32() * 1000.0);
+        let bump_intro = self.bump_in(t, true);
+        let bump_settled = self.bump_in(t, false);
         let Some((_, scene)) = self.scene.as_mut() else {
             return;
         };
-        let t = scene_ms(elapsed.as_secs_f32() * 1000.0);
         let settled = !self.intro;
         let dim = Style::default().add_modifier(Modifier::DIM);
         let bold = Style::default().add_modifier(Modifier::BOLD);
@@ -231,7 +258,8 @@ impl Onigiri {
                 let tw = if intro { t } else { 1.0e6 };
                 let animate = !settled && *rows >= TEXTURE_ROWS;
                 let light = Light::at(t, animate);
-                ball.draw(&mut p, t, intro, &light);
+                let bump = if intro { bump_intro } else { bump_settled };
+                ball.draw(&mut p, t, intro, bump, &light);
                 // Past the intro the wordmark, like the light, only changes
                 // on the light's tick.
                 let tick = if t >= SETTLED_AT {
@@ -239,7 +267,7 @@ impl Onigiri {
                 } else {
                     t
                 };
-                word.draw(&mut p, tick, intro, &light, animate);
+                word.draw(&mut p, tick, intro, bump, &light, animate);
                 if tw >= word::VERSION_AT {
                     let (left, y) = (*left, *base / 2 + 1);
                     p.put(left, y, "cli", Style::default());
@@ -261,7 +289,8 @@ impl Onigiri {
                 let intro = !settled && *rows >= INTRO_ROWS;
                 let tw = if intro { t } else { 1.0e6 };
                 let light = Light::at(t, !settled && *rows >= TEXTURE_ROWS);
-                ball.draw(&mut p, t, intro, &light);
+                let bump = if intro { bump_intro } else { bump_settled };
+                ball.draw(&mut p, t, intro, bump, &light);
                 if tw >= word::WORD_AT {
                     let y = (*base / 2.0).round() as i32 + 1;
                     let x = (*cx - 8.0).round() as i32;

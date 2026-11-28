@@ -251,10 +251,10 @@ enum Nori {
 }
 
 impl Nori {
-    fn at(g: &Geo, cx: i32, cy: i32) -> Option<Nori> {
-        let mask = coverage(g, cx, cy, Pose::REST);
+    fn at(g: &Geo, cx: i32, cy: i32, pose: Pose) -> Option<Nori> {
+        let mask = coverage(g, cx, cy, pose);
         let at = |dy: f32| {
-            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, Pose::REST);
+            let (u, v) = g.local(cx as f32 + 0.5, 2.0 * cy as f32 + dy, pose);
             normal(u, v)
         };
         match mask {
@@ -326,7 +326,7 @@ impl Ball {
                     None
                 };
                 let nori = if g.in_band_cols(cx) && cy >= g.band_top {
-                    Nori::at(&g, cx, cy)
+                    Nori::at(&g, cx, cy, Pose::REST)
                 } else {
                     None
                 };
@@ -353,8 +353,9 @@ impl Ball {
     }
 
     /// Draw the ball at time `t`. `intro` plays gather/press/wrap;
-    /// otherwise the ball is settled.
-    pub fn draw(&mut self, p: &mut Paint, t: f32, intro: bool, light: &Light) {
+    /// otherwise the ball is settled. `bump` is how far into a bump the
+    /// settled ball is, if one is playing.
+    pub fn draw(&mut self, p: &mut Paint, t: f32, intro: bool, bump: Option<f32>, light: &Light) {
         let g = self.g;
         let t_shape = if intro { t } else { 1.0e6 };
         let front = front(t_shape);
@@ -383,16 +384,26 @@ impl Ball {
         if front < 0.0 {
             return;
         }
-        let live = t_shape < PRESS_DONE;
-        let pose = Pose::at(t_shape, &g.p);
+        let bumping = bump.is_some() && t_shape >= PRESS_DONE;
+        let (pose, live) = match bump {
+            Some(b) if bumping => (Pose::bump(b, &g.p), true),
+            _ => (Pose::at(t_shape, &g.p), t_shape < PRESS_DONE),
+        };
+        // The band rides up with the ball.
+        let band_top = band_top - (pose.lift / 2.0).round() as i32;
         for cell in &self.cells {
             let (cx, cy) = (cell.x, cell.y);
             if banded && g.in_band_cols(cx) && cy >= band_top {
-                if let Some(nori) = cell.nori {
+                let nori = if live {
+                    Nori::at(&g, cx, cy, pose)
+                } else {
+                    cell.nori
+                };
+                if let Some(nori) = nori {
                     nori.draw(p, cx, cy, light);
                 }
             } else if live {
-                if pressed(&g, cx, cy, front)
+                if (bumping || pressed(&g, cx, cy, front))
                     && let Some(rice) = Rice::at(&g, cx, cy, pose, self.texture)
                 {
                     rice.draw(p, cx, cy, light);
