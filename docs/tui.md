@@ -40,6 +40,11 @@ one Enter accepts it:
   `$NORI_HOME/.nori-install.json`. Only counts are sent; never prompts, code,
   file paths or sessions.
 
+When the intro plays (terminals about 40 rows and taller), the form fades in
+top-down once the ball lands; in shorter terminals it shows at once. A key
+pressed before the form is fully drawn shows it at once and is otherwise
+ignored, so an early Enter never submits answers you have not seen.
+
 `↑`/`↓` move, `←`/`→` or `Space` change an answer, `q` quits. Nori then asks
 whether you trust the folder and saves the answer per project in
 `config.toml`.

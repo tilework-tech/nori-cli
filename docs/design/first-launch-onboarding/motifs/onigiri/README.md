@@ -10,17 +10,22 @@ then a light circles the ball for as long as the welcome is on screen. The
 
 ## Timeline
 
+Times below are wall-clock. The constants in `timeline.rs` and
+`word/motion.rs` are on the timeline's own clock, and the intro plays `SPEED`
+(1.15) times faster than that until `SETTLED_AT` (3000), which is 2.61 s of
+real time. After that the scene runs in real time, so the light keeps its 6 s turn.
+
 | ms | What happens |
 |---|---|
-| 150–980 | Four pens write `n`, `o`, `r`, `i` at once (60 ms apart) in half-cell steps, leaving unlit glass. |
-| per letter | Each finished letter ignites with a neon stutter (330 ms), glows, then cools over 0.9 s to a faint resting glow. |
-| 700–1560 | As the pens finish, grains (Braille dots) fly into frame, overshoot their spot by about 12% and spring back. |
-| 1560–1670 | Press: the solid ball grows from the centre and squashes 10%. |
-| 1670–1930 | Hop: the ball springs up stretched and falls back; the green i dot falls at the same time. |
-| 1930 | Ball and dot land on the same frame: the ball squashes and wobbles out over 0.5 s, the dot squashes, bounces and ripples down the stem. |
-| 2450–2830 | The nori band wraps up from the base, one row at a time. |
-| 2450→ | The light eases up to speed over 1.2 s, then turns once every 6 s. |
-| 3400→ | A shimmer runs across the wordmark and back once per turn of the light. |
+| 130–850 | Four pens write `n`, `o`, `r`, `i` at once (52 ms apart) in half-cell steps, leaving unlit glass. |
+| per letter | Each finished letter ignites with a neon stutter (290 ms), glows, then cools over 0.8 s to a faint resting glow. |
+| 610–1360 | As the pens finish, grains (Braille dots) fly into frame, overshoot their spot by about 12% and spring back. |
+| 1360–1450 | Press: the solid ball grows from the centre and squashes 10%. |
+| 1450–1680 | Hop: the ball springs up stretched and falls back; the green i dot falls at the same time. |
+| 1680 | Ball and dot land on the same frame: the ball squashes and wobbles out over 0.45 s, the dot squashes, bounces and ripples down the stem. In the TUI the setup form starts fading in here. |
+| 2130–2460 | The nori band wraps up from the base, one row at a time. |
+| 2130→ | The light eases up to speed over about 1 s, then turns once every 6 s. |
+| 3010→ | A shimmer runs across the wordmark and back once per turn of the light. |
 
 ## Wordmark
 
@@ -100,7 +105,7 @@ frame-time and KB/s overlay. Numbers are from one core of a cloud EPYC.
   rewritten. 32 steps would cut loop output by another third.
 - Grains fade in and out with how strongly they catch the light instead of
   switching on at a threshold.
-- The remaining cost is the press (860–1350 ms), which is still computed live
+- The remaining cost is the press (860–1350 ms of timeline time), which is still computed live
   because the ball squashes every frame, and ratatui's own diff and colour
   encoding, which now costs more than drawing.
 

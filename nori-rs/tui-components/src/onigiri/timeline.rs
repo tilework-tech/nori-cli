@@ -35,6 +35,28 @@ pub(crate) const LIGHT_PERIOD: f32 = 6000.0;
 /// light and the effects that follow it move.
 pub(crate) const SETTLED_AT: f32 = 3000.0;
 
+/// The intro plays this many times faster than the timeline above. After
+/// SETTLED_AT the scene runs in real time, so the light keeps LIGHT_PERIOD.
+pub(crate) const SPEED: f32 = 1.15;
+
+/// Timeline time for a wall-clock time since the welcome started.
+pub(crate) fn scene_ms(real_ms: f32) -> f32 {
+    if real_ms * SPEED < SETTLED_AT {
+        real_ms * SPEED
+    } else {
+        real_ms + SETTLED_AT - SETTLED_AT / SPEED
+    }
+}
+
+/// Wall-clock time at which the timeline reaches `scene_ms`.
+pub(crate) fn real_ms(scene_ms: f32) -> f32 {
+    if scene_ms < SETTLED_AT {
+        scene_ms / SPEED
+    } else {
+        scene_ms - SETTLED_AT + SETTLED_AT / SPEED
+    }
+}
+
 /// Frame interval while things fly in and get pressed.
 pub(crate) const INTRO_FRAME: Duration = Duration::from_millis(16);
 /// The light only moves on this 30 Hz grid, and loop frames are scheduled on
