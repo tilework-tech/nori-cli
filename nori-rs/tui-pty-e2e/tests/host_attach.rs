@@ -518,13 +518,6 @@ fn watcher_cannot_answer_a_permission_request_but_controller_can() {
 #[test]
 fn controller_and_watcher_report_the_selected_sessions_status_and_clear_on_detach() {
     let host = Host::new();
-    let mut config = std::fs::OpenOptions::new()
-        .append(true)
-        .open(host.home.path().join("config.toml"))
-        .unwrap();
-    config
-        .write_all(b"\n[tui]\nprogram_status = true\n")
-        .unwrap();
     host.start();
     let mut controller = host.create_session();
     ask(&mut controller, "status session");

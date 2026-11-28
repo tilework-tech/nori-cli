@@ -2240,8 +2240,8 @@ pub struct TuiConfigToml {
     pub thoughts_in_history: Option<bool>,
 
     /// Report the foreground session's status (idle, working, blocked, done,
-    /// error) to the terminal with OSC 7501. Off by default because the
-    /// sequence is not standard.
+    /// error) to the terminal with OSC 7501. On by default; terminals without
+    /// support ignore the sequence. Set to `false` to stop the reports.
     pub program_status: Option<bool>,
 
     /// Put the real approval title in blocked reports instead of the generic
@@ -2654,7 +2654,7 @@ impl Default for NoriConfig {
             file_manager: None,
             pinned_plan_drawer: false,
             thoughts_in_history: true,
-            program_status: false,
+            program_status: true,
             program_status_approval_titles: false,
             tool_output: ToolOutput::default(),
             tool_output_from_command_line: false,

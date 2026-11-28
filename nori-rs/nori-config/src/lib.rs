@@ -212,26 +212,33 @@ custom_working_message_list = ["alpha", "beta"]
     }
 
     #[test]
-    fn program_status_reports_stay_off_until_the_tui_opts_in() {
+    fn program_status_reports_are_on_until_the_tui_opts_out() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
+        let load = |contents: &str| {
+            std::fs::write(&config_path, contents).unwrap();
+            let config = NoriConfig::load_from_path(&config_path).unwrap();
+            (config.program_status, config.program_status_approval_titles)
+        };
 
-        std::fs::write(&config_path, "agent = \"gemini\"\n").unwrap();
-        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(load("agent = \"gemini\"\n"), (true, false));
         assert_eq!(
-            (config.program_status, config.program_status_approval_titles),
+            load("agent = \"gemini\"\n\n[tui]\nprogram_status = false\n"),
             (false, false)
         );
-
-        std::fs::write(
-            &config_path,
-            "agent = \"gemini\"\n\n[tui]\nprogram_status = true\nprogram_status_approval_titles = true\n",
-        )
-        .unwrap();
-        let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(
-            (config.program_status, config.program_status_approval_titles),
+            load("agent = \"gemini\"\n\n[tui]\nprogram_status = true\n"),
+            (true, false)
+        );
+        assert_eq!(
+            load("agent = \"gemini\"\n\n[tui]\nprogram_status_approval_titles = true\n"),
             (true, true)
+        );
+        assert_eq!(
+            load(
+                "agent = \"gemini\"\n\n[tui]\nprogram_status = false\nprogram_status_approval_titles = true\n"
+            ),
+            (false, true)
         );
     }
 
