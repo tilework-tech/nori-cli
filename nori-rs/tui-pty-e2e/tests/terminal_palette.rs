@@ -12,6 +12,7 @@ use tui_pty_e2e::TuiSession;
 fn handles_input_while_palette_replies_are_pending() {
     let config = SessionConfig {
         no_color: false,
+        withhold_palette_replies: true,
         ..SessionConfig::new()
     }
     .with_agent_env("COLORTERM", "truecolor")
@@ -21,7 +22,6 @@ fn handles_input_while_palette_replies_are_pending() {
     )
     .with_mock_response("Palette draft delivered.");
     let mut session = TuiSession::spawn_with_config(24, 90, config).unwrap();
-    session.withhold_palette_replies();
 
     let deadline = Instant::now() + TIMEOUT;
     while !session

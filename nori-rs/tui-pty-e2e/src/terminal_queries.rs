@@ -15,10 +15,19 @@ const QUERIES: &[(&[u8], &[u8])] = &[
 #[derive(Default)]
 pub(super) struct TerminalQueries {
     pending: Vec<u8>,
-    pub(super) withhold_palette: bool,
+    withhold_palette: bool,
 }
 
 impl TerminalQueries {
+    /// A terminal that answers every query, or every query but the palette
+    /// colors when `withhold_palette` is set.
+    pub(super) fn new(withhold_palette: bool) -> Self {
+        Self {
+            pending: Vec::new(),
+            withhold_palette,
+        }
+    }
+
     /// Observe the same byte stream as the screen parser. Keep a possible query
     /// prefix when the PTY splits a sequence between reads.
     pub(super) fn respond(&mut self, bytes: &[u8], writer: &mut dyn Write) -> io::Result<()> {
